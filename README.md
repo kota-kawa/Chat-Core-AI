@@ -1,3 +1,5 @@
+> 一番下に日本語版もあります
+
 # Chat-Core
 
 **🚀 Live Demo: [https://chatcore-ai.com/](https://chatcore-ai.com/)**
