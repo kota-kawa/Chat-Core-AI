@@ -39,6 +39,25 @@ class AdminApiTestCase(unittest.TestCase):
         payload = json.loads(response.body.decode())
         self.assertEqual(payload["status"], "success")
 
+
+    def test_login_rejects_external_next_url(self):
+        password = "admin-test-password"
+        external_next_values = ["https://evil.com", "http://evil.com", "//evil.com"]
+
+        with patch.object(admin_views, "ADMIN_PASSWORD_HASH", hash_password(password)):
+            for external_next in external_next_values:
+                with self.subTest(next=external_next):
+                    request = make_request(
+                        method="POST",
+                        path="/admin/api/login",
+                        json_body={"password": password, "next": external_next},
+                    )
+                    response = asyncio.run(admin_views.api_login(request))
+                    payload = json.loads(response.body.decode())
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(payload["status"], "success")
+                    self.assertEqual(payload["redirect"], "http://localhost:3000/admin")
+
     def test_login_fails_with_wrong_password(self):
         request = make_request(
             method="POST",

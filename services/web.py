@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from typing import Any, Dict, List, Tuple, TypeVar
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from fastapi import Request
 from fastapi.encoders import jsonable_encoder
@@ -159,6 +159,23 @@ def frontend_url(path: str = "", *, query: str | None = None) -> str:
     return url
 
 
+def sanitize_next_path(next_path: Any, default: str = "/") -> str:
+    # `next` は同一サイト内の相対パスのみ許可し、外部URLは拒否する
+    # Allow only same-site relative paths for `next`; reject external URLs.
+    if not isinstance(next_path, str):
+        return default
+
+    candidate = next_path.strip()
+    if not candidate.startswith("/"):
+        return default
+
+    parsed = urlsplit(candidate)
+    if parsed.scheme or parsed.netloc:
+        return default
+
+    return candidate
+
+
 def redirect_to_frontend(
     request: Request, path: str | None = None, *, status_code: int = 302
 ) -> RedirectResponse:
@@ -172,5 +189,6 @@ def redirect_to_frontend(
 def frontend_login_url(next_path: str | None = None) -> str:
     # ログイン後遷移先を next クエリに埋め込んだログインURLを組み立てる
     # Build login URL with optional post-login `next` query parameter.
-    query = urlencode({"next": next_path}) if next_path else None
+    safe_next_path = sanitize_next_path(next_path, default="/") if next_path else None
+    query = urlencode({"next": safe_next_path}) if safe_next_path else None
     return frontend_url("/login", query=query)

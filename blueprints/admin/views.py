@@ -19,6 +19,7 @@ from services.web import (
     jsonify,
     log_and_internal_server_error,
     redirect_to_frontend,
+    sanitize_next_path,
     url_for,
 )
 
@@ -113,16 +114,12 @@ async def login(request: Request):
 async def api_login(request: Request):
     payload = await _get_payload(request)
     password = payload.get("password") or ""
-    next_url = payload.get("next") or "/admin"
+    next_url = sanitize_next_path(payload.get("next"), default="/admin")
 
     if _verify_admin_password(password):
         request.session["is_admin"] = True
         flash(request, "Logged in as administrator.", "success")
-        redirect_url = (
-            next_url
-            if next_url.startswith(("http://", "https://"))
-            else frontend_url(next_url)
-        )
+        redirect_url = frontend_url(next_url)
         return jsonify({"status": "success", "redirect": redirect_url})
 
     return jsonify({"status": "fail", "error": "Invalid password."}, status_code=401)
