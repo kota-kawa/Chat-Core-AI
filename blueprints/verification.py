@@ -1,4 +1,5 @@
 import logging
+import time
 
 from fastapi import APIRouter, Request
 
@@ -23,6 +24,9 @@ from services.web import (
 
 verification_bp = APIRouter()
 logger = logging.getLogger(__name__)
+
+VERIFICATION_CODE_TTL_SECONDS = 300
+VERIFICATION_CODE_MAX_ATTEMPTS = 5
 
 @verification_bp.post("/api/send_verification_email", name="verification.api_send_verification_email")
 async def api_send_verification_email(request: Request):
@@ -78,6 +82,8 @@ async def api_send_verification_email(request: Request):
     code = generate_verification_code()
     request.session["verification_code"] = code
     request.session["temp_user_id"] = user_id  # どのユーザーか紐付け
+    request.session["verification_code_issued_at"] = int(time.time())
+    request.session["verification_code_attempts"] = 0
     # Link verification flow to this user id.
 
     subject = "AIチャットサービス: 認証コード"
@@ -118,15 +124,41 @@ async def api_verify_registration_code(request: Request):
         return validation_error
 
     user_code = payload.authCode
-    session_code = request.session.get("verification_code")
-    user_id = request.session.get("temp_user_id")
+    session = request.session
+    session_code = session.get("verification_code")
+    user_id = session.get("temp_user_id")
 
     if not session_code or not user_id:
         return jsonify({"status": "fail", "error": "セッション情報がありません。最初からやり直してください"}, status_code=400)
 
+    issued_at = int(session.get("verification_code_issued_at") or 0)
+    attempts = int(session.get("verification_code_attempts") or 0)
+
+    if issued_at <= 0 or int(time.time()) - issued_at > VERIFICATION_CODE_TTL_SECONDS:
+        session.pop("verification_code", None)
+        session.pop("temp_user_id", None)
+        session.pop("verification_code_issued_at", None)
+        session.pop("verification_code_attempts", None)
+        return jsonify({"status": "fail", "error": "認証コードの有効期限が切れています。"}, status_code=400)
+
+    if attempts >= VERIFICATION_CODE_MAX_ATTEMPTS:
+        session.pop("verification_code", None)
+        session.pop("temp_user_id", None)
+        session.pop("verification_code_issued_at", None)
+        session.pop("verification_code_attempts", None)
+        return jsonify({"status": "fail", "error": "認証コードの試行回数が上限に達しました。"}, status_code=400)
+
     submitted_code = str(user_code or "")
     if not constant_time_compare(submitted_code, str(session_code)):
-        return jsonify({"status": "fail", "error": "認証コードが違います。"}, status_code=400)
+        attempts += 1
+        session["verification_code_attempts"] = attempts
+        if attempts >= VERIFICATION_CODE_MAX_ATTEMPTS:
+            session.pop("verification_code", None)
+            session.pop("temp_user_id", None)
+            session.pop("verification_code_issued_at", None)
+            session.pop("verification_code_attempts", None)
+            return jsonify({"status": "fail", "error": "認証コードの試行回数が上限に達しました。"}, status_code=400)
+        return jsonify({"status": "fail", "error": "認証コードが一致しません。"}, status_code=400)
 
     # ここから成功処理 ----------------------------------------------------
     # Success path starts here.
@@ -137,13 +169,15 @@ async def api_verify_registration_code(request: Request):
 
     # ログイン状態にセット
     # Set authenticated session fields.
-    request.session["user_id"]    = user_id
+    session["user_id"] = user_id
     user                  = await run_blocking(get_user_by_id, user_id)
-    request.session["user_email"] = user["email"] if user else ""
+    session["user_email"] = user["email"] if user else ""
 
     # 一時セッション情報のクリア
     # Clear temporary verification session data.
-    request.session.pop("verification_code", None)
-    request.session.pop("temp_user_id", None)
+    session.pop("verification_code", None)
+    session.pop("temp_user_id", None)
+    session.pop("verification_code_issued_at", None)
+    session.pop("verification_code_attempts", None)
 
     return jsonify({"status": "success"})
