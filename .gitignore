@@ -28,6 +28,7 @@ Thumbs.db
 
 
 logs/*.log
+*.log
 
 
 # ビルドディレクトリを無視
