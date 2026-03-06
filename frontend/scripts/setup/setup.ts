@@ -275,13 +275,17 @@ function loadTaskCards(options: LoadTaskCardsOptions = {}) {
     ioModal.dataset.bound = "true";
     ioModal.setAttribute("aria-hidden", "true");
     // 背景クリック or 閉じるボタン押下でモーダルを閉じる
-    ioModal.addEventListener("click", (e) => {
-      const target = e.target as Element | null;
-      if (!target) return;
-      if (target === ioModal || target.closest("[data-close-task-detail]")) {
-        closeIOModal();
-      }
-    });
+    ioModal.addEventListener(
+      "click",
+      (e) => {
+        const target = e.target as Element | null;
+        if (!target) return;
+        if (target === ioModal || target.closest("[data-close-task-detail]")) {
+          closeIOModal();
+        }
+      },
+      true
+    );
     // 内部クリックでは閉じない
     ioModalContent.addEventListener("click", (e) => e.stopPropagation());
     // ESC キーで閉じる
