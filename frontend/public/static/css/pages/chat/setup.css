@@ -278,31 +278,112 @@
 /* モーダルの全体（背景部分含む） */
 #io-modal {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   z-index: 9999;
   display: none;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1rem, 3.2vw, 2.2rem);
+  background: linear-gradient(165deg, rgba(10, 29, 23, 0.7), rgba(10, 29, 23, 0.5));
+  backdrop-filter: blur(5px);
 }
 
 /* モーダル内のコンテンツ領域 */
 .io-modal-content {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: #edf6f1;
-  border-radius: 14px;
-  padding: 1.75rem;
-  max-width: 520px;
-  width: 90%;
-  text-align: center;
-  max-height: 80vh;
+  width: min(820px, 100%);
+  max-height: min(84vh, 760px);
   overflow-y: auto;
   overflow-x: hidden;
-  word-wrap: break-word;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+  border-radius: 24px;
+  border: 1px solid rgba(25, 195, 125, 0.26);
+  background: linear-gradient(145deg, #f8fcf9 0%, #edf7f2 100%);
+  box-shadow: 0 30px 60px rgba(7, 21, 17, 0.34);
+  padding: clamp(1rem, 2.2vw, 1.55rem);
+}
+
+.task-detail-modal-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.task-detail-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem;
+}
+
+.task-detail-modal-eyebrow {
+  margin: 0;
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2c8f67;
+}
+
+.task-detail-modal-title {
+  margin: 0.15rem 0 0;
+  font-size: clamp(1.25rem, 2.3vw, 1.5rem);
+  line-height: 1.25;
+  color: #123428;
+}
+
+.task-detail-modal-close {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border: 1px solid #d9e9e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #225742;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.task-detail-modal-close:hover {
+  transform: translateY(-1px);
+  border-color: rgba(25, 195, 125, 0.42);
+  box-shadow: 0 10px 18px rgba(15, 35, 28, 0.12);
+}
+
+.task-detail-sections {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.8rem;
+}
+
+.task-detail-section {
+  padding: 0.9rem 1rem;
+  border: 1px solid #dcebe4;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(16, 44, 35, 0.06);
+}
+
+.task-detail-section-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0f5132;
+}
+
+.task-detail-section-body {
+  margin-top: 0.52rem;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #1f2d28;
+  word-break: break-word;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.task-detail-section-body-compact {
+  max-height: none;
 }
 
 /* タスク選択ヘッダーを横並びに */
@@ -368,5 +449,33 @@
   .io-container {
     font-size: 0.8rem;
     width: calc(100% - 0.5rem);
+  }
+
+  #io-modal {
+    padding: 0.85rem;
+  }
+
+  .io-modal-content {
+    border-radius: 18px;
+    max-height: 88vh;
+    padding: 1rem;
+  }
+
+  .task-detail-modal-title {
+    font-size: 1.2rem;
+  }
+
+  .task-detail-modal-close {
+    width: 34px;
+    height: 34px;
+  }
+
+  .task-detail-section {
+    padding: 0.78rem 0.82rem;
+  }
+
+  .task-detail-section-body {
+    font-size: 0.9rem;
+    max-height: 185px;
   }
 }

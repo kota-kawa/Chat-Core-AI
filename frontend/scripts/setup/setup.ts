@@ -108,6 +108,10 @@ function escapeHtml(value: unknown) {
     .replace(/'/g, "&#39;");
 }
 
+function formatMultilineHtml(value: unknown) {
+  return escapeHtml(value).replace(/\r\n|\r|\n/g, "<br>");
+}
+
 function normalizeTask(task: TaskItem | null | undefined) {
   if (!task) {
     return {
@@ -262,38 +266,71 @@ function loadTaskCards(options: LoadTaskCardsOptions = {}) {
 
   // モーダルを閉じるヘルパ
   function closeIOModal() {
-    if (ioModal) ioModal.style.display = "none";
+    if (!ioModal) return;
+    ioModal.style.display = "none";
+    ioModal.setAttribute("aria-hidden", "true");
   }
 
   if (ioModal && ioModalContent && !ioModal.dataset.bound) {
     ioModal.dataset.bound = "true";
-    // 画面クリックでモーダルを閉じる
-    document.addEventListener("click", () => {
-      if (ioModal && ioModal.style.display === "block") closeIOModal();
+    ioModal.setAttribute("aria-hidden", "true");
+    // 背景クリック or 閉じるボタン押下でモーダルを閉じる
+    ioModal.addEventListener("click", (e) => {
+      const target = e.target as Element | null;
+      if (!target) return;
+      if (target === ioModal || target.closest("[data-close-task-detail]")) {
+        closeIOModal();
+      }
     });
     // 内部クリックでは閉じない
-    if (ioModalContent) {
-      ioModalContent.addEventListener("click", (e) => e.stopPropagation());
-    }
+    ioModalContent.addEventListener("click", (e) => e.stopPropagation());
+    // ESC キーで閉じる
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      if (ioModal.style.display === "none") return;
+      closeIOModal();
+    });
   }
 
   const openTaskDetailModal = (card: HTMLElement) => {
     if (!ioModal || !ioModalContent) return;
-    const safeTask = escapeHtml(card.dataset.task || "");
-    const safePromptTemplate = escapeHtml(card.dataset.prompt_template || "");
-    const safeInputExamples = escapeHtml(card.dataset.input_examples || "");
-    const safeOutputExamples = escapeHtml(card.dataset.output_examples || "");
+    const safeTask = formatMultilineHtml(card.dataset.task || "タスク名がありません");
+    const safePromptTemplate = formatMultilineHtml(card.dataset.prompt_template || "プロンプトテンプレートはありません");
+    const safeInputExamples = formatMultilineHtml(card.dataset.input_examples || "入力例がありません");
+    const safeOutputExamples = formatMultilineHtml(card.dataset.output_examples || "出力例がありません");
     ioModalContent.innerHTML = `
-      <h5 style="margin-bottom:1rem;">タスク詳細</h5>
-      <div style="margin-bottom:.5rem;font-weight:bold;">タスク名</div>
-      <div style="margin-bottom:1rem;">${safeTask}</div>
-      <div style="margin-bottom:.5rem;font-weight:bold;">プロンプトテンプレート</div>
-      <div style="margin-bottom:1rem;">${safePromptTemplate}</div>
-      <div style="margin-bottom:.5rem;font-weight:bold;">入力例</div>
-      <div style="margin-bottom:1rem;">${safeInputExamples}</div>
-      <div style="margin-bottom:.5rem;font-weight:bold;">出力例</div>
-      <div>${safeOutputExamples}</div>`;
-    ioModal.style.display = "block";
+      <div class="task-detail-modal-shell">
+        <div class="task-detail-modal-header">
+          <div>
+            <p class="task-detail-modal-eyebrow">Task Detail</p>
+            <h5 class="task-detail-modal-title" id="taskDetailTitle">タスク詳細</h5>
+          </div>
+          <button type="button" class="task-detail-modal-close" data-close-task-detail aria-label="タスク詳細を閉じる">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div class="task-detail-sections">
+          <section class="task-detail-section">
+            <h6 class="task-detail-section-title">タスク名</h6>
+            <div class="task-detail-section-body task-detail-section-body-compact">${safeTask}</div>
+          </section>
+          <section class="task-detail-section">
+            <h6 class="task-detail-section-title">プロンプトテンプレート</h6>
+            <div class="task-detail-section-body">${safePromptTemplate}</div>
+          </section>
+          <section class="task-detail-section">
+            <h6 class="task-detail-section-title">入力例</h6>
+            <div class="task-detail-section-body">${safeInputExamples}</div>
+          </section>
+          <section class="task-detail-section">
+            <h6 class="task-detail-section-title">出力例</h6>
+            <div class="task-detail-section-body">${safeOutputExamples}</div>
+          </section>
+        </div>
+      </div>`;
+    ioModal.style.display = "flex";
+    ioModal.setAttribute("aria-hidden", "false");
+    ioModal.focus();
   };
 
   if (taskSelection && !taskSelection.dataset.detailBound) {

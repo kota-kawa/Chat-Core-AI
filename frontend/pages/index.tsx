@@ -88,7 +88,15 @@ const bodyMarkup = `
       </div>
 
       <!-- 画面中央モーダル -->
-      <div id="io-modal" style="display: none;">
+      <div
+        id="io-modal"
+        style="display: none;"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="taskDetailTitle"
+        aria-hidden="true"
+        tabindex="-1"
+      >
         <div class="io-modal-content" id="io-modal-content">
           <!-- JS で入出力例をここに挿入 -->
         </div>
