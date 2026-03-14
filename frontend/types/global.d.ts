@@ -44,7 +44,7 @@ declare global {
     scrollMessageToBottom?: () => void;
     createCopyBtn?: (getText: () => string) => HTMLButtonElement;
     renderUserMessage?: (text: string) => void;
-    animateBotMessage?: (text: string) => void;
+    renderBotMessageImmediate?: (text: string) => void;
     startStreamingBotMessage?: () => StreamingBotMessageHandle | null;
     displayMessage?: (text: string, sender: string) => void;
     loadChatHistory?: () => void;

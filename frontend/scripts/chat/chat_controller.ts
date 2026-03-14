@@ -156,17 +156,17 @@ async function generateResponse(message: string, aiModel: string) {
     window.hideTypingIndicator?.();
     spinnerWrap.remove();
     if (data && data.response) {
-      window.animateBotMessage?.(data.response);
+      window.renderBotMessageImmediate?.(data.response);
     } else if (data && data.error) {
-      window.animateBotMessage?.("エラー: " + data.error);
+      window.renderBotMessageImmediate?.("エラー: " + data.error);
     } else {
-      window.animateBotMessage?.("エラー: 予期しないエラーが発生しました。");
+      window.renderBotMessageImmediate?.("エラー: 予期しないエラーが発生しました。");
     }
   } catch (err) {
     window.hideTypingIndicator?.();
     spinnerWrap.remove();
     const errorMessage = err instanceof Error ? err.message : String(err);
-    window.animateBotMessage?.("エラー: " + errorMessage);
+    window.renderBotMessageImmediate?.("エラー: " + errorMessage);
   }
 }
 

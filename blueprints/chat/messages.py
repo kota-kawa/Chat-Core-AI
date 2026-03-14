@@ -19,11 +19,11 @@ from services.chat_service import (
 from services.llm_daily_limit import consume_llm_daily_quota
 from services.llm import (
     get_llm_response,
-    get_gemini_response_stream,
+    get_llm_response_stream,
     GEMINI_DEFAULT_MODEL,
     LlmInvalidModelError,
     LlmServiceError,
-    is_gemini_model,
+    is_streaming_model,
 )
 from services.request_models import ChatMessageRequest
 from services.web import (
@@ -74,7 +74,7 @@ def _sse_event(event: str, payload: dict[str, Any]) -> bytes:
     return f"event: {event}\ndata: {body}\n\n".encode("utf-8")
 
 
-def _iter_gemini_stream_events(
+def _iter_llm_stream_events(
     conversation_messages: list[dict[str, str]],
     model: str,
     *,
@@ -82,11 +82,11 @@ def _iter_gemini_stream_events(
     is_authenticated: bool,
     sid: str | None,
 ) -> Iterator[bytes]:
-    # Gemini 応答を SSE で配信し、配信完了後に履歴へ保存する
-    # Stream Gemini output via SSE and persist the final message on completion.
+    # LLM 応答を SSE で配信し、配信完了後に履歴へ保存する
+    # Stream LLM output via SSE and persist the final message on completion.
     chunks: list[str] = []
     try:
-        for chunk in get_gemini_response_stream(conversation_messages, model):
+        for chunk in get_llm_response_stream(conversation_messages, model):
             chunks.append(chunk)
             yield _sse_event("chunk", {"text": chunk})
     except LlmServiceError:
@@ -101,14 +101,14 @@ def _iter_gemini_stream_events(
         elif sid is not None:
             ephemeral_store.append_message(sid, chat_room_id, "assistant", bot_reply)
     except Exception:
-        logger.exception("Failed to persist streamed Gemini response.")
+        logger.exception("Failed to persist streamed LLM response.")
         yield _sse_event("error", {"message": "応答は生成されましたが、履歴保存に失敗しました。"})
         return
 
     yield _sse_event("done", {"response": bot_reply})
 
 
-def _build_gemini_stream_response(
+def _build_llm_stream_response(
     conversation_messages: list[dict[str, str]],
     model: str,
     *,
@@ -120,7 +120,7 @@ def _build_gemini_stream_response(
     # Wrap the sync generator with StreamingResponse for SSE delivery.
 
     return StreamingResponse(
-        _iter_gemini_stream_events(
+        _iter_llm_stream_events(
             conversation_messages,
             model,
             chat_room_id=chat_room_id,
@@ -331,8 +331,8 @@ async def chat(request: Request):
             status_code=429,
         )
 
-    if is_gemini_model(model):
-        return _build_gemini_stream_response(
+    if is_streaming_model(model):
+        return _build_llm_stream_response(
             conversation_messages,
             model,
             chat_room_id=chat_room_id,

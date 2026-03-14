@@ -104,6 +104,43 @@ class LlmServiceTestCase(unittest.TestCase):
         self.assertTrue(mock_stream.closed)
         self.assertTrue(mock_gemini.chat.completions.create.call_args.kwargs["stream"])
 
+    def test_get_groq_response_stream_yields_chunks_and_closes_stream(self):
+        mock_groq = MagicMock()
+        mock_stream = _MockStream(
+            _mock_stream_chunk("groq"),
+            _mock_stream_chunk(None),
+            _mock_stream_chunk("-stream"),
+        )
+        mock_groq.chat.completions.create.return_value = mock_stream
+
+        with patch.object(llm, "groq_client", mock_groq):
+            response = list(
+                llm.get_groq_response_stream(
+                    [{"role": "user", "content": "hello"}],
+                    llm.GROQ_MODEL,
+                )
+            )
+
+        self.assertEqual(response, ["groq", "-stream"])
+        self.assertTrue(mock_stream.closed)
+        self.assertTrue(mock_groq.chat.completions.create.call_args.kwargs["stream"])
+
+    def test_get_llm_response_stream_routes_to_groq(self):
+        with patch.object(
+            llm,
+            "get_groq_response_stream",
+            return_value=iter(["groq", "-stream"]),
+        ) as mock_stream:
+            response = list(
+                llm.get_llm_response_stream(
+                    [{"role": "user", "content": "hello"}],
+                    llm.GROQ_MODEL,
+                )
+            )
+
+        self.assertEqual(response, ["groq", "-stream"])
+        mock_stream.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

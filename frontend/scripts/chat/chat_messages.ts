@@ -1,4 +1,4 @@
-// chat_messages.ts – メッセージ描画／コピー／ボットアニメ
+// chat_messages.ts – メッセージ描画／コピー／ボット表示
 // --------------------------------------------------
 // ※ DOMPurify が未ロードでも message_utils 側でテキスト描画にフォールバックする
 
@@ -77,39 +77,14 @@ function renderUserMessage(text: string) {
   if (window.saveMessageToLocalStorage) window.saveMessageToLocalStorage(htmlText, "user");
 }
 
-/* Bot メッセージをタイプアニメーションで描画 */
-function animateBotMessage(originalText: string) {
+/* Bot メッセージを即時描画 */
+function renderBotMessageImmediate(text: string) {
   const elements = createBotMessageElements();
   if (!elements) return;
   const { wrapper, msg } = elements;
-
-  let raw = "";
-  let idx = 0;
-  const chunk = 12;
-  const typingInterval = 50;
-  const renderInterval = 120;
-  let lastRenderAt = 0;
-
-  const renderMarkdown = (force = false) => {
-    const now = Date.now();
-    if (!force && now - lastRenderAt < renderInterval) return;
-    renderBotMessage(wrapper, msg, raw);
-    lastRenderAt = now;
-  };
-
-  const typingTimer = setInterval(() => {
-    if (idx >= originalText.length) {
-      clearInterval(typingTimer);
-      renderMarkdown(true);
-
-      if (window.saveMessageToLocalStorage) window.saveMessageToLocalStorage(raw, "bot");
-      return;
-    }
-    raw += originalText.slice(idx, idx + chunk);
-    idx += chunk;
-    msg.dataset.fullText = raw;
-    renderMarkdown();
-  }, typingInterval);
+  msg.dataset.fullText = text;
+  renderBotMessage(wrapper, msg, text);
+  if (window.saveMessageToLocalStorage) window.saveMessageToLocalStorage(text, "bot");
 }
 
 function startStreamingBotMessage(): StreamingBotMessageHandle | null {
@@ -204,7 +179,7 @@ function displayMessage(text: string, sender: string) {
 
 // ---- window へ公開 ------------------------------
 window.renderUserMessage = renderUserMessage;
-window.animateBotMessage = animateBotMessage;
+window.renderBotMessageImmediate = renderBotMessageImmediate;
 window.startStreamingBotMessage = startStreamingBotMessage;
 window.displayMessage = displayMessage;
 
