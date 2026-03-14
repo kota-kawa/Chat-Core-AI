@@ -93,37 +93,40 @@ alembic upgrade head
 - `alembic/versions/` contains incremental migration history.
 - `db/performance_indexes.sql` is kept as a direct SQL fallback for index-only updates.
 
-## Required Environment Variables
-Set these in `.env` or in `docker-compose.yml`:
-- `GROQ_API_KEY`: Groq API key
-- `Gemini_API_KEY`: Google Generative AI API key
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`: Google OAuth client credentials
-- `GOOGLE_PROJECT_ID`: Google OAuth project ID (`project_id` in client config)
-- `GOOGLE_JS_ORIGIN`: allowed JavaScript origin for Google OAuth (default: `https://chatcore-ai.com`)
-- `GROQ_MODEL`: Groq model name used by OpenAI SDK (default: `openai/gpt-oss-20b`)
-- `GEMINI_DEFAULT_MODEL`: default Gemini model when `model` is omitted (default: `gemini-2.5-flash`)
-- `LLM_DAILY_API_LIMIT`: daily cap for total `/api/chat` LLM calls across all users (default: `300`)
-- `AUTH_EMAIL_DAILY_SEND_LIMIT`: daily cap for login/verification email sends across all users (default: `50`)
-- `FASTAPI_SECRET_KEY`: session secret (`FLASK_SECRET_KEY` is supported as a legacy fallback)
-- `ADMIN_PASSWORD_HASH`: hashed admin password in format `pbkdf2_sha256$iterations$salt$hash` (no in-code default)
-- `SEND_ADDRESS` / `SEND_PASSWORD`: Gmail account for verification emails (`EMAIL_SEND_PASSWORD` is accepted as a legacy fallback)
-- `POSTGRES_HOST` / `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`: PostgreSQL settings
-- `DB_POOL_MIN_CONN` / `DB_POOL_MAX_CONN`: DB connection pool min/max size (defaults: `1` / `10`)
-- `REDIS_HOST` / `REDIS_PORT` / `REDIS_DB` / `REDIS_PASSWORD` (optional): Redis settings
-- `FASTAPI_ENV`: set to `production` to enable stricter SameSite/Secure settings (`FLASK_ENV` is supported as a legacy fallback)
-- `LOG_LEVEL` (optional): app log level (default: `INFO`)
-- `LOG_OUTPUT` (optional): log formatter output (`json` or `plain`, default: `json`)
-- `LOG_DIR` (optional): log output directory (default: `logs`)
-- `APP_LOG_FILE` / `ERROR_LOG_FILE` (optional): app/error log file names (defaults: `app.log` / `error.log`)
-- `LOG_MAX_BYTES` / `LOG_BACKUP_COUNT` (optional): rotating log size and retention count (defaults: `10485760` / `10`)
+## Challenges & Solutions
 
-Generate `ADMIN_PASSWORD_HASH` with:
+**Redis session fallback** — Sessions are stored server-side in Redis, but a Redis outage would have invalidated all user sessions. Solved by implementing a hybrid session middleware that automatically falls back to signed cookies when Redis is unavailable or fails mid-request, with no disruption to the user.
 
-```sh
-python3 -c "from services.security import hash_password; print(hash_password('your_admin_password_here'))"
-```
+**DB connection resilience** — In Docker Compose, the backend container sometimes starts before the database is ready. Solved by having the connection pool try multiple host aliases (`db`, `localhost`, `127.0.0.1`) in sequence, validating each candidate before accepting it.
 
-- When storing hashes or passwords containing `$` in Docker Compose `.env`, escape each dollar sign as `$$`.
+**LLM cost control** — Exposing LLM endpoints directly risked runaway API costs. Solved by implementing a centralized daily quota counter (shared across all users) that short-circuits requests at the service layer before any external API call is made.
+
+**Testing Redis-dependent code in CI** — The session middleware's Redis fallback behavior requires an actual Redis connection to test, which is not available in standard CI runners. Solved by separating the fallback tests into a quarantined job that runs on a best-effort basis (`continue-on-error: true`) on push to main, keeping the main test gate fast and reliable.
+
+## CI/CD & Testing
+
+**Pipeline** (GitHub Actions — runs on every push and pull request):
+
+| Job | What it checks |
+|---|---|
+| Ruff Lint | Syntax errors and undefined names (fast gate) |
+| Unit Tests | 25+ unit tests covering services, auth, chat, rate limiting, security |
+| Integration Tests | Route-level endpoint tests against the full ASGI app |
+| Coverage Report | Combined unit + integration coverage, uploaded as XML artifact |
+| Frontend Checks | TypeScript type-check and import resolution via `npm run typecheck` |
+| Deploy | SSH deploy to production — only runs after all jobs pass on `main` |
+
+- Concurrent runs on the same branch are automatically cancelled to avoid redundant work.
+- A scheduled run fires daily at 03:00 UTC to catch dependency regressions.
+- Failed deploys trigger an automatic rollback to the previous Git commit.
+
+## Performance & Scalability
+
+- **Connection pooling**: PostgreSQL connections are managed via `psycopg2.ThreadedConnectionPool` with configurable min/max bounds, avoiding per-request connection overhead.
+- **Redis-backed sessions**: When Redis is available, session data is stored server-side, enabling stateless horizontal scaling of the application tier.
+- **Rate limiting**: Per-day caps on LLM API calls and verification email sends are enforced at the service layer, protecting both external API quotas and infrastructure cost.
+- **Health endpoints**: `GET /healthz` returns process liveness; `GET /readyz` checks live DB reachability and reports Redis as degraded-but-optional, enabling load balancer health checks without false negatives.
+- **Structured logging**: All requests emit JSON logs with `X-Request-ID` correlation IDs, making distributed tracing and incident diagnosis tractable at scale.
 
 ## Project Structure
 - `app.py`: FastAPI entry point
@@ -275,36 +278,40 @@ alembic upgrade head
 - `alembic/versions/`: 段階的な変更履歴
 - `db/performance_indexes.sql`: インデックスのみを直接適用するフォールバックSQL
 
-## 必要な環境変数
-- `GROQ_API_KEY`: Groq API キー
-- `Gemini_API_KEY`: Google Generative AI API キー
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`: Google OAuth クライアント資格情報
-- `GOOGLE_PROJECT_ID`: Google OAuth の project_id
-- `GOOGLE_JS_ORIGIN`: Google OAuth の JavaScript origin（デフォルト: `https://chatcore-ai.com`）
-- `GROQ_MODEL`: OpenAI SDK経由で使うGroqモデル名（デフォルト: `openai/gpt-oss-20b`）
-- `GEMINI_DEFAULT_MODEL`: `model`未指定時に使うGeminiモデル（デフォルト: `gemini-2.5-flash`）
-- `LLM_DAILY_API_LIMIT`: 全ユーザー合計の`/api/chat`経由LLM呼び出し日次上限（デフォルト: `300`）
-- `AUTH_EMAIL_DAILY_SEND_LIMIT`: 全ユーザー合計のログイン/認証メール送信日次上限（デフォルト: `50`）
-- `FASTAPI_SECRET_KEY`: セッション用シークレット（`FLASK_SECRET_KEY` は旧環境向けフォールバックとして利用可）
-- `ADMIN_PASSWORD_HASH`: 管理者パスワードのハッシュ（形式: `pbkdf2_sha256$iterations$salt$hash`、コード内デフォルトなし）
-- `SEND_ADDRESS` / `SEND_PASSWORD`: 認証メール送信用 Gmail（`EMAIL_SEND_PASSWORD` は旧環境向けフォールバックとして利用可）
-- `POSTGRES_HOST` / `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`: PostgreSQL 設定
-- `DB_POOL_MIN_CONN` / `DB_POOL_MAX_CONN`: DB コネクションプール最小/最大数（デフォルト: `1` / `10`）
-- `REDIS_HOST` / `REDIS_PORT` / `REDIS_DB` / `REDIS_PASSWORD`（任意）: Redis 設定
-- `FASTAPI_ENV`: `production` で SameSite/Secure 設定を強化（`FLASK_ENV` は旧環境向けフォールバックとして利用可）
-- `LOG_LEVEL`（任意）: アプリログレベル（デフォルト: `INFO`）
-- `LOG_OUTPUT`（任意）: ログ形式（`json` または `plain`、デフォルト: `json`）
-- `LOG_DIR`（任意）: ログ出力ディレクトリ（デフォルト: `logs`）
-- `APP_LOG_FILE` / `ERROR_LOG_FILE`（任意）: 通常/エラーログのファイル名（デフォルト: `app.log` / `error.log`）
-- `LOG_MAX_BYTES` / `LOG_BACKUP_COUNT`（任意）: ローテーションのサイズ上限と保持数（デフォルト: `10485760` / `10`）
+## 課題と解決策（Challenges & Solutions）
 
-`ADMIN_PASSWORD_HASH` の生成例:
+**Redisセッションのフォールバック** — セッションをRedisにサーバー側保存する設計では、Redis障害時に全ユーザーのセッションが失われるリスクがありました。ハイブリッドセッションミドルウェアを実装し、RedisがダウンまたはリクエストM中にエラーが発生した場合は署名付きCookieへ自動フォールバックすることで、ユーザーへの影響ゼロで障害を吸収しています。
 
-```sh
-python3 -c "from services.security import hash_password; print(hash_password('your_admin_password_here'))"
-```
+**DBコネクションの耐障害性** — Docker ComposeではバックエンドコンテナがDBより先に起動してしまうことがありました。コネクションプールが `db`・`localhost`・`127.0.0.1` など複数ホストを順番に試し、接続確認が取れた最初のホストを採用する設計で解決しています。
 
-- Docker Compose の `.env` で `$` を含むハッシュやパスワードを扱う場合は、各 `$` を `$$` にエスケープしてください。
+**LLMコスト制御** — LLMエンドポイントを直接公開すると外部API費用が青天井になるリスクがあります。全ユーザー合算の日次クォータカウンターをサービス層で一元管理し、外部API呼び出しの前段階でリクエストを遮断することで対処しています。
+
+**CI環境でのRedis依存テスト** — セッションのフォールバック挙動は実際のRedis接続が必要なため、通常のCIランナーではテストできません。フォールバックテストを独立した `continue-on-error: true` のジョブに隔離し、mainへのpush時のみベストエフォートで実行することで、メインのテストゲートを高速かつ信頼性の高い状態に保っています。
+
+## CI/CDとテスト（CI/CD & Testing）
+
+**パイプライン**（GitHub Actions — 全push・PRで実行）:
+
+| ジョブ | 確認内容 |
+|---|---|
+| Ruff Lint | 構文エラー・未定義名の即時検出（高速ゲート） |
+| Unit Tests | サービス層・認証・チャット・レート制限・セキュリティなど25件以上 |
+| Integration Tests | 実際のASGIアプリに対するルートレベルのエンドポイントテスト |
+| Coverage Report | ユニット＋統合テストの合算カバレッジをXMLアーティファクトとして保存 |
+| Frontend Checks | TypeScript型チェックおよびimport解決の検証 |
+| Deploy | 全ジョブ通過後にSSHで本番デプロイ（mainのpush時のみ） |
+
+- 同一ブランチで並走するジョブは自動キャンセルして無駄な実行を排除。
+- 毎日03:00 UTCにスケジュール実行し、依存パッケージの非互換を継続的に検知。
+- デプロイ失敗時は直前のGitコミットへ自動ロールバック。
+
+## パフォーマンスとスケーラビリティ（Performance & Scalability）
+
+- **コネクションプール**: PostgreSQL接続を `psycopg2.ThreadedConnectionPool` で管理し、リクエストごとの接続確立コストを排除。プールサイズは環境変数で調整可能。
+- **Redisセッション**: Redis利用時はセッションデータをサーバー側に保存。アプリ層をステートレスに保ち、水平スケールを容易にする設計。
+- **レート制限**: LLM API呼び出しと認証メール送信の日次上限をサービス層で一元管理し、外部APIのクォータ超過とコスト増大を防止。
+- **ヘルスエンドポイント**: `GET /healthz` でプロセス生存確認、`GET /readyz` でDB到達性とRedis劣化状態を返し、ロードバランサーのヘルスチェックに対応。
+- **構造化ログ**: 全リクエストに `X-Request-ID` 相関IDを付与したJSONログを出力し、障害時のトレーサビリティを確保。
 
 ## ディレクトリ構成
 - `app.py`: FastAPI エントリーポイント
