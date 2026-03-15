@@ -55,6 +55,12 @@ function createInitialTaskCardsMarkup(tasks: DefaultTask[]) {
 
 const initialTaskCardsMarkup = createInitialTaskCardsMarkup(defaultTasks as DefaultTask[]);
 
+function createZodiacLoaderMarkup(loaderClass: string) {
+  const links = Array.from({ length: 8 }, () => '<span class="constellation-loader__link"></span>').join("");
+  const nodes = Array.from({ length: 8 }, () => '<span class="constellation-loader__node"></span>').join("");
+  return `<div class="constellation-loader ${loaderClass}" aria-hidden="true">${links}${nodes}</div>`;
+}
+
 const bodyMarkup = `
 <!-- 浮遊メニュー -->
   <action-menu></action-menu>
@@ -138,17 +144,7 @@ const bodyMarkup = `
         aria-live="polite"
         aria-label="AIが応答を準備しています"
       >
-        <div class="constellation-loader typing-indicator__constellation" aria-hidden="true">
-          <span class="constellation-loader__link constellation-loader__link--1"></span>
-          <span class="constellation-loader__link constellation-loader__link--2"></span>
-          <span class="constellation-loader__link constellation-loader__link--3"></span>
-          <span class="constellation-loader__link constellation-loader__link--4"></span>
-          <span class="constellation-loader__node constellation-loader__node--1"></span>
-          <span class="constellation-loader__node constellation-loader__node--2"></span>
-          <span class="constellation-loader__node constellation-loader__node--3"></span>
-          <span class="constellation-loader__node constellation-loader__node--4"></span>
-          <span class="constellation-loader__node constellation-loader__node--5"></span>
-        </div>
+        ${createZodiacLoaderMarkup("typing-indicator__constellation")}
       </div>
     </div>
     <div class="chat-main">

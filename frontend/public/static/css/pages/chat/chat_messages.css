@@ -371,7 +371,7 @@
 
 .thinking-message-wrapper {
   width: auto;
-  max-width: 16rem;
+  max-width: 16.4rem;
 }
 
 .thinking-message {
@@ -380,14 +380,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 12.75rem;
+  min-width: 13rem;
   padding: 1rem;
   border-radius: 28px;
-  border: 1px solid rgba(18, 111, 83, 0.24);
+  border: 1px solid rgba(183, 143, 69, 0.22);
   background:
-    radial-gradient(circle at 16% 18%, rgba(255, 255, 255, 0.96), transparent 28%),
-    radial-gradient(circle at 86% 20%, rgba(84, 217, 170, 0.22), transparent 38%),
-    linear-gradient(138deg, rgba(255, 255, 255, 0.98), rgba(227, 247, 238, 0.94)),
+    radial-gradient(circle at 16% 18%, rgba(255, 255, 255, 0.96), transparent 30%),
+    radial-gradient(circle at 84% 18%, rgba(255, 207, 114, 0.2), transparent 40%),
+    linear-gradient(138deg, rgba(255, 255, 255, 0.98), rgba(248, 241, 226, 0.94)),
     rgba(255, 255, 255, 0.92);
   box-shadow:
     0 20px 44px rgba(15, 23, 42, 0.14),
@@ -401,17 +401,16 @@
   inset: auto -8% -42% 8%;
   height: 88%;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(51, 214, 159, 0.34), transparent 72%);
+  background: radial-gradient(circle, rgba(255, 201, 94, 0.26), transparent 72%);
   filter: blur(10px);
   animation: constellationPanelDrift 5.8s ease-in-out infinite;
   pointer-events: none;
 }
 
 .thinking-message__constellation {
-  --constellation-width: 12.9rem;
-  --constellation-height: 5.2rem;
+  --constellation-width: 13rem;
+  --constellation-height: 5.35rem;
   --constellation-radius: 22px;
-  --constellation-scale: 1;
 }
 
 @keyframes streamMessageAppear {
@@ -458,17 +457,17 @@
   }
 
   .thinking-message-wrapper {
-    max-width: 14rem;
+    max-width: 14.2rem;
   }
 
   .thinking-message {
-    min-width: 11.4rem;
+    min-width: 11.6rem;
     padding: 0.8rem;
     border-radius: 24px;
   }
 
   .thinking-message__constellation {
-    --constellation-width: 11.2rem;
-    --constellation-height: 4.5rem;
+    --constellation-width: 11.4rem;
+    --constellation-height: 4.65rem;
   }
 }
