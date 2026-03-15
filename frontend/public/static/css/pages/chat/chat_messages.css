@@ -26,6 +26,10 @@
   max-width: 85%;
 }
 
+.message-wrapper--streaming {
+  animation: streamMessageAppear 0.28s ease-out;
+}
+
 .user-message-wrapper {
   margin-left: auto;
   max-width: 80%;
@@ -40,6 +44,7 @@
 /* バブル */
 .user-message,
 .bot-message {
+  position: relative;
   line-height: 1.6;
   font-size: 0.95rem;
   padding: 1rem 1.25rem;
@@ -68,6 +73,40 @@
   text-wrap: pretty;
   width: 100%;
   padding: 0; /* Remove padding for bot messages to feel more like a document */
+}
+
+.bot-message--streaming {
+  isolation: isolate;
+  min-height: 1.6em;
+  padding-right: 0.9rem;
+  white-space: pre-wrap;
+}
+
+.bot-message--streaming::before {
+  content: "";
+  position: absolute;
+  inset: -0.25rem -0.45rem -0.35rem -0.2rem;
+  z-index: -1;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 16% 24%, rgba(25, 195, 125, 0.11), transparent 34%),
+    linear-gradient(110deg, rgba(25, 195, 125, 0.06), rgba(25, 195, 125, 0), rgba(15, 23, 42, 0.03));
+  opacity: 0.92;
+  pointer-events: none;
+  animation: streamSurfaceShift 4.6s ease-in-out infinite;
+}
+
+.bot-message--streaming::after {
+  content: "";
+  display: inline-block;
+  width: 0.58ch;
+  height: 1.05em;
+  margin-left: 0.14rem;
+  vertical-align: -0.14em;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #22c084, #109868);
+  box-shadow: 0 0 0 1px rgba(34, 192, 132, 0.12), 0 0 14px rgba(34, 192, 132, 0.24);
+  animation: streamCaretPulse 1.08s ease-in-out infinite;
 }
 
 /* Markdown可読性を上げつつ、要素間の余白を詰める */
@@ -314,6 +353,10 @@
   transform: translateY(-1px);
 }
 
+.message-wrapper--streaming .copy-btn {
+  pointer-events: none;
+}
+
 .thinking-message-wrapper {
   width: auto;
   max-width: 16rem;
@@ -357,6 +400,42 @@
   --constellation-height: 5.2rem;
   --constellation-radius: 22px;
   --constellation-scale: 1;
+}
+
+@keyframes streamMessageAppear {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes streamSurfaceShift {
+  0%,
+  100% {
+    transform: translate3d(-1.5%, 0, 0);
+    opacity: 0.75;
+  }
+  50% {
+    transform: translate3d(1.5%, 0, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes streamCaretPulse {
+  0%,
+  42% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+  58%,
+  100% {
+    opacity: 0.24;
+    transform: scaleY(0.9);
+  }
 }
 
 @media (max-width: 576px) {
