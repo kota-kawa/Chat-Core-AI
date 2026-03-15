@@ -5,6 +5,7 @@ from services.default_tasks import (
     default_task_payloads,
     default_task_rows,
     ensure_default_tasks_seeded,
+    load_default_tasks,
 )
 from tests.helpers.db_helpers import TransactionTrackingConnection
 
@@ -100,6 +101,31 @@ class DefaultTasksTestCase(unittest.TestCase):
         self.assertFalse(fake_conn.rolled_back)
         self.assertTrue(fake_cursor.closed)
         self.assertTrue(fake_conn.closed)
+
+    def test_repository_default_tasks_include_full_seed_set(self):
+        expected_names = {
+            "📧 メール作成",
+            "💡 アイデア発想",
+            "📄 要約",
+            "🛠️ 問題解決",
+            "📋 問題へ回答",
+            "ℹ️ 情報提供",
+            "🍳 レシピ",
+            "✈️ 旅行計画",
+            "💬 悩み相談",
+            "📨 メッセージへの返答",
+            "💑 デート計画",
+        }
+
+        load_default_tasks.cache_clear()
+        try:
+            tasks = load_default_tasks()
+        finally:
+            load_default_tasks.cache_clear()
+
+        task_names = {task["name"] for task in tasks}
+        self.assertEqual(len(tasks), len(expected_names))
+        self.assertSetEqual(task_names, expected_names)
 
 
 if __name__ == "__main__":
