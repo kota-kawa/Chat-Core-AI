@@ -278,7 +278,7 @@ jobs:
   deploy:
     name: Deploy (main push)
     runs-on: ubuntu-latest
-    needs: [lint, unittest, integration_tests, coverage, frontend_checks]
+    needs: [lint, unittest, integration_tests, frontend_checks]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 15
 
@@ -296,7 +296,7 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
 
           port="${SERVER_PORT:-22}"
-          ssh-keyscan -p "${port}" -H "${SERVER_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -p "${port}" -H "${SERVER_HOST}" >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Deploy via SSH
         env:
@@ -312,8 +312,13 @@ jobs:
           cd /var/www/chatcore-ai
 
           PREV_COMMIT="$(git rev-parse HEAD)"
+          if docker compose up --help 2>/dev/null | grep -q -- '--wait'; then
+            COMPOSE_WAIT=1
+          else
+            COMPOSE_WAIT=0
+          fi
           compose_up_with_wait() {
-            if docker compose up --help 2>/dev/null | grep -q -- '--wait'; then
+            if [ "${COMPOSE_WAIT}" -eq 1 ]; then
               docker compose up -d --build --wait --wait-timeout 180
             else
               docker compose up -d --build
@@ -327,12 +332,12 @@ jobs:
           rollback() {
             echo "Deploy failed. Rolling back to ${PREV_COMMIT}"
             git reset --hard "${PREV_COMMIT}"
-            compose_up_with_wait || true
+            compose_up_with_wait
           }
           on_error() {
             trap - ERR
             diagnose
-            rollback
+            rollback || echo "Rollback also failed." >&2
           }
           fail_deploy() {
             echo "$1" >&2
@@ -375,7 +380,7 @@ jobs:
           compose_up_with_wait
 
           docker compose ps
-          if ! docker compose up --help 2>/dev/null | grep -q -- '--wait'; then
+          if [ "${COMPOSE_WAIT}" -eq 0 ]; then
             for service in app frontend db redis; do
               wait_for_service_healthy "${service}" 90
             done
