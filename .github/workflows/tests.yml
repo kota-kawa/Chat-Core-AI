@@ -303,15 +303,15 @@ jobs:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
           SERVER_PORT: ${{ secrets.SERVER_PORT }}
-          DEPLAY_PATH: ${{ secrets.DEPLAY_PATH }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
         run: |
           set -Eeuo pipefail
           port="${SERVER_PORT:-22}"
-          : "${DEPLAY_PATH:?DEPLAY_PATH secret is required}"
-          ssh -i ~/.ssh/id_rsa -o BatchMode=yes -o StrictHostKeyChecking=accept-new -p "${port}" "${SERVER_USER}@${SERVER_HOST}" "export DEPLAY_PATH='${DEPLAY_PATH}'; bash -s" <<'REMOTE_SCRIPT'
+          : "${DEPLOY_PATH:?DEPLOY_PATH secret is required}"
+          ssh -i ~/.ssh/id_rsa -o BatchMode=yes -o StrictHostKeyChecking=accept-new -p "${port}" "${SERVER_USER}@${SERVER_HOST}" "export DEPLOY_PATH='${DEPLOY_PATH}'; bash -s" <<'REMOTE_SCRIPT'
           set -Eeuo pipefail
 
-          cd "${DEPLAY_PATH}"
+          cd "${DEPLOY_PATH}"
 
           PREV_COMMIT="$(git rev-parse HEAD)"
           if docker compose up --help 2>/dev/null | grep -q -- '--wait'; then
