@@ -19,7 +19,6 @@ declare global {
     chatMessages?: HTMLElement | null;
     userInput?: HTMLInputElement | null;
     sendBtn?: HTMLElement | null;
-    typingIndicator?: HTMLElement | null;
     backToSetupBtn?: HTMLElement | null;
     newChatBtn?: HTMLElement | null;
     chatRoomListEl?: HTMLElement | null;
@@ -66,7 +65,6 @@ declare global {
   var chatMessages: HTMLElement | null;
   var userInput: HTMLInputElement | null;
   var sendBtn: HTMLElement | null;
-  var typingIndicator: HTMLElement | null;
   var backToSetupBtn: HTMLElement | null;
   var newChatBtn: HTMLElement | null;
   var chatRoomListEl: HTMLElement | null;

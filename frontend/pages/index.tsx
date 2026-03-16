@@ -55,12 +55,6 @@ function createInitialTaskCardsMarkup(tasks: DefaultTask[]) {
 
 const initialTaskCardsMarkup = createInitialTaskCardsMarkup(defaultTasks as DefaultTask[]);
 
-function createZodiacLoaderMarkup(loaderClass: string) {
-  const links = Array.from({ length: 8 }, () => '<span class="constellation-loader__link"></span>').join("");
-  const nodes = Array.from({ length: 8 }, () => '<span class="constellation-loader__node"></span>').join("");
-  return `<div class="constellation-loader ${loaderClass}" aria-hidden="true">${links}${nodes}</div>`;
-}
-
 const bodyMarkup = `
 <!-- 浮遊メニュー -->
   <action-menu></action-menu>
@@ -134,17 +128,6 @@ const bodyMarkup = `
           <i class="bi bi-arrow-left"></i>
         </button>
         <span>Chat Core</span>
-      </div>
-
-      <div
-        class="typing-indicator"
-        id="typing-indicator"
-        style="display: none;"
-        role="status"
-        aria-live="polite"
-        aria-label="AIが応答を準備しています"
-      >
-        ${createZodiacLoaderMarkup("typing-indicator__constellation")}
       </div>
     </div>
     <div class="chat-main">

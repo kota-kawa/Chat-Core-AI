@@ -374,12 +374,10 @@ function showChatInterface() {
 
 /* タイピングインジケータ */
 function showTypingIndicator() {
-  if (!window.typingIndicator) return;
-  window.typingIndicator.style.display = "inline-flex";
+  window.chatMessages?.setAttribute("aria-busy", "true");
 }
 function hideTypingIndicator() {
-  if (!window.typingIndicator) return;
-  window.typingIndicator.style.display = "none";
+  window.chatMessages?.removeAttribute("aria-busy");
 }
 
 /* LLM 出力の Markdown を HTML に変換 */

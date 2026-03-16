@@ -56,7 +56,6 @@
 }
 
 /* Thinking インジケータ */
-.typing-indicator,
 .thinking-message {
   --constellation-panel-border: rgba(25, 195, 125, 0.3);
   --constellation-panel-glow: rgba(58, 214, 149, 0.28);
@@ -82,44 +81,6 @@
   --constellation-node-ring: rgba(216, 255, 232, 0.18);
   --constellation-node-shadow: rgba(43, 194, 127, 0.72);
   --constellation-node-halo: rgba(123, 241, 188, 0.48);
-}
-
-.typing-indicator {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 10rem;
-  padding: 0.48rem;
-  border-radius: 999px;
-  border: 1px solid var(--constellation-panel-border);
-  background:
-    radial-gradient(circle at 18% 20%, var(--constellation-surface-highlight), transparent 34%),
-    linear-gradient(135deg, rgba(9, 64, 46, 0.96), rgba(4, 36, 27, 0.98));
-  box-shadow:
-    inset 0 1px 0 rgba(228, 255, 240, 0.12),
-    0 14px 34px rgba(6, 9, 24, 0.34);
-  backdrop-filter: blur(14px);
-  overflow: hidden;
-  isolation: isolate;
-}
-
-.typing-indicator::before {
-  content: "";
-  position: absolute;
-  inset: auto 2% -76% -12%;
-  height: 144%;
-  border-radius: 999px;
-  background: radial-gradient(circle, var(--constellation-panel-glow), transparent 72%);
-  filter: blur(12px);
-  animation: constellationPanelDrift 5.8s ease-in-out infinite;
-  pointer-events: none;
-}
-
-.typing-indicator__constellation {
-  --constellation-width: 8.35rem;
-  --constellation-height: 2.95rem;
-  --constellation-radius: 999px;
 }
 
 .constellation-loader {
@@ -315,20 +276,7 @@
   }
 }
 
-@media (max-width: 768px) {
-  .typing-indicator {
-    min-width: 8.6rem;
-    padding: 0.38rem;
-  }
-
-  .typing-indicator__constellation {
-    --constellation-width: 7.2rem;
-    --constellation-height: 2.55rem;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .typing-indicator::before,
   .thinking-message::before,
   .constellation-loader,
   .constellation-loader::before,

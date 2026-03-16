@@ -199,10 +199,6 @@ function getLoaderMetrics(loader: HTMLElement) {
     return { width: rect.width, height: rect.height };
   }
 
-  if (loader.classList.contains("typing-indicator__constellation")) {
-    return { width: 126, height: 45 };
-  }
-
   return { width: 206, height: 86 };
 }
 
