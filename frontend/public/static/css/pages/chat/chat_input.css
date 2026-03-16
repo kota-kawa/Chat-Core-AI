@@ -56,6 +56,34 @@
 }
 
 /* Thinking インジケータ */
+.typing-indicator,
+.thinking-message {
+  --constellation-panel-border: rgba(25, 195, 125, 0.3);
+  --constellation-panel-glow: rgba(58, 214, 149, 0.28);
+  --constellation-surface-highlight: rgba(159, 244, 203, 0.18);
+  --constellation-stage-highlight: rgba(116, 233, 180, 0.18);
+  --constellation-stage-highlight-soft: rgba(208, 255, 232, 0.12);
+  --constellation-stage-aurora: rgba(67, 201, 138, 0.14);
+  --constellation-stage-start: rgba(12, 82, 58, 0.98);
+  --constellation-stage-end: rgba(5, 42, 31, 1);
+  --constellation-nebula-core: rgba(88, 231, 165, 0.34);
+  --constellation-nebula-soft: rgba(225, 255, 238, 0.16);
+  --constellation-nebula-sheen: rgba(193, 255, 222, 0.12);
+  --constellation-comet-core: rgba(241, 255, 248, 0.98);
+  --constellation-comet-mid: rgba(152, 243, 197, 0.92);
+  --constellation-comet-trail: rgba(68, 205, 141, 0.08);
+  --constellation-comet-shadow: rgba(33, 168, 111, 0.28);
+  --constellation-link-bright: rgba(225, 255, 239, 0.96);
+  --constellation-link-main: rgba(109, 237, 179, 0.98);
+  --constellation-link-shadow: rgba(41, 177, 117, 0.34);
+  --constellation-node-start: #f3fff8;
+  --constellation-node-mid: #a7f5cb;
+  --constellation-node-end: #2fc686;
+  --constellation-node-ring: rgba(216, 255, 232, 0.18);
+  --constellation-node-shadow: rgba(43, 194, 127, 0.72);
+  --constellation-node-halo: rgba(123, 241, 188, 0.48);
+}
+
 .typing-indicator {
   position: relative;
   display: inline-flex;
@@ -64,12 +92,12 @@
   min-width: 10rem;
   padding: 0.48rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 223, 150, 0.34);
+  border: 1px solid var(--constellation-panel-border);
   background:
-    radial-gradient(circle at 18% 20%, rgba(255, 208, 112, 0.16), transparent 34%),
-    linear-gradient(135deg, rgba(54, 38, 18, 0.96), rgba(11, 17, 42, 0.98));
+    radial-gradient(circle at 18% 20%, var(--constellation-surface-highlight), transparent 34%),
+    linear-gradient(135deg, rgba(9, 64, 46, 0.96), rgba(4, 36, 27, 0.98));
   box-shadow:
-    inset 0 1px 0 rgba(255, 245, 214, 0.1),
+    inset 0 1px 0 rgba(228, 255, 240, 0.12),
     0 14px 34px rgba(6, 9, 24, 0.34);
   backdrop-filter: blur(14px);
   overflow: hidden;
@@ -82,7 +110,7 @@
   inset: auto 2% -76% -12%;
   height: 144%;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(255, 201, 94, 0.3), transparent 72%);
+  background: radial-gradient(circle, var(--constellation-panel-glow), transparent 72%);
   filter: blur(12px);
   animation: constellationPanelDrift 5.8s ease-in-out infinite;
   pointer-events: none;
@@ -102,14 +130,14 @@
   border-radius: var(--constellation-radius, 999px);
   overflow: hidden;
   background:
-    radial-gradient(circle at 18% 22%, rgba(255, 215, 116, 0.16), transparent 26%),
-    radial-gradient(circle at 76% 18%, rgba(255, 246, 201, 0.12), transparent 30%),
-    radial-gradient(circle at 58% 82%, rgba(124, 120, 255, 0.14), transparent 30%),
-    linear-gradient(148deg, rgba(20, 22, 56, 0.98), rgba(8, 11, 24, 1));
-  border: 1px solid rgba(255, 218, 130, 0.42);
+    radial-gradient(circle at 18% 22%, var(--constellation-stage-highlight), transparent 26%),
+    radial-gradient(circle at 76% 18%, var(--constellation-stage-highlight-soft), transparent 30%),
+    radial-gradient(circle at 58% 82%, var(--constellation-stage-aurora), transparent 30%),
+    linear-gradient(148deg, var(--constellation-stage-start), var(--constellation-stage-end));
+  border: 1px solid rgba(96, 229, 173, 0.34);
   box-shadow:
-    inset 0 1px 0 rgba(255, 245, 214, 0.08),
-    0 0 0 1px rgba(255, 192, 77, 0.08),
+    inset 0 1px 0 rgba(233, 255, 242, 0.08),
+    0 0 0 1px rgba(58, 214, 149, 0.08),
     0 14px 28px rgba(0, 0, 0, 0.28);
   animation: constellationStageDrift 6.4s ease-in-out infinite;
 }
@@ -120,9 +148,9 @@
   inset: -12% -6% 2%;
   border-radius: inherit;
   background:
-    radial-gradient(circle at 26% 60%, rgba(255, 194, 79, 0.38), transparent 18%),
-    radial-gradient(circle at 68% 28%, rgba(255, 252, 226, 0.2), transparent 18%),
-    linear-gradient(126deg, transparent 14%, rgba(255, 231, 158, 0.08) 46%, transparent 72%);
+    radial-gradient(circle at 26% 60%, var(--constellation-nebula-core), transparent 18%),
+    radial-gradient(circle at 68% 28%, var(--constellation-nebula-soft), transparent 18%),
+    linear-gradient(126deg, transparent 14%, var(--constellation-nebula-sheen) 46%, transparent 72%);
   opacity: 0.94;
   filter: blur(10px);
   animation: constellationNebulaDrift 7.2s ease-in-out infinite;
@@ -137,8 +165,8 @@
   height: 1.5rem;
   border-radius: 999px;
   background:
-    radial-gradient(circle, rgba(255, 255, 255, 0.98) 0%, rgba(255, 226, 146, 0.92) 28%, rgba(255, 226, 146, 0.08) 62%, transparent 72%);
-  box-shadow: -0.8rem 0 1.4rem rgba(255, 191, 82, 0.28);
+    radial-gradient(circle, var(--constellation-comet-core) 0%, var(--constellation-comet-mid) 28%, var(--constellation-comet-trail) 62%, transparent 72%);
+  box-shadow: -0.8rem 0 1.4rem var(--constellation-comet-shadow);
   filter: blur(1px);
   animation: constellationComet 4.4s cubic-bezier(0.26, 0.08, 0.2, 1) infinite;
 }
@@ -157,15 +185,15 @@
   opacity: 0;
   transform-origin: left center;
   transform: translateY(-50%) rotate(0deg);
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 245, 197, 0.96) 14%, rgba(255, 204, 92, 0.98) 54%, transparent 100%);
-  box-shadow: 0 0 12px rgba(255, 191, 82, 0.34);
+  background: linear-gradient(90deg, transparent 0%, var(--constellation-link-bright) 14%, var(--constellation-link-main) 54%, transparent 100%);
+  box-shadow: 0 0 12px var(--constellation-link-shadow);
 }
 
 .constellation-loader__link::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.92) 50%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(247, 255, 250, 0.92) 50%, transparent 100%);
   opacity: 0.48;
   animation: constellationLinkShimmer 2.6s ease-in-out infinite;
   animation-delay: var(--link-delay, 0s);
@@ -179,10 +207,10 @@
   opacity: 0;
   border-radius: 999px;
   transform: translate(-50%, -50%) scale(0.28);
-  background: radial-gradient(circle at 36% 36%, #fffdf2 0%, #ffe89f 42%, #ffbf45 100%);
+  background: radial-gradient(circle at 36% 36%, var(--constellation-node-start) 0%, var(--constellation-node-mid) 42%, var(--constellation-node-end) 100%);
   box-shadow:
-    0 0 0 1px rgba(255, 236, 181, 0.14),
-    0 0 18px rgba(255, 191, 82, 0.76);
+    0 0 0 1px var(--constellation-node-ring),
+    0 0 18px var(--constellation-node-shadow);
 }
 
 .constellation-loader__node::before {
@@ -190,7 +218,7 @@
   position: absolute;
   inset: -0.55rem;
   border-radius: inherit;
-  background: radial-gradient(circle, rgba(255, 220, 136, 0.54), transparent 72%);
+  background: radial-gradient(circle, var(--constellation-node-halo), transparent 72%);
   opacity: 0;
   animation: constellationNodeHalo 2.8s ease-in-out infinite;
   animation-delay: var(--node-delay, 0s);
