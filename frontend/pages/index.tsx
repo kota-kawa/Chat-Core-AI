@@ -147,7 +147,7 @@ const bodyMarkup = `
         <div class="input-container">
           <div class="input-wrapper">
             <input type="text" id="user-input" placeholder="メッセージを入力..." />
-            <button class="primary-button" id="send-btn">
+            <button type="button" id="send-btn" aria-label="送信">
               <i class="bi bi-send"></i>
             </button>
           </div>

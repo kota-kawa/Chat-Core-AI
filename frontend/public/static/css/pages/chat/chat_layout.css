@@ -55,6 +55,7 @@
   overflow: hidden;
   background: var(--surface-primary, #fff);
   min-height: 0;
+  position: relative;
 }
 
 .chat-sidebar-toggle {
@@ -106,13 +107,21 @@
     transform: translateX(0);
   }
 
-  /* サイドバー背面のオーバーレイ（ブラーなし） */
-  body.chat-page.sidebar-visible::after {
+  /* サイドバー背面オーバーレイ（暗くし過ぎない） */
+  .chat-main::after {
     content: '';
-    position: fixed;
+    position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, 0.16);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
     z-index: 1490;
+  }
+
+  body.chat-page.sidebar-visible .chat-main::after {
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 
