@@ -21,6 +21,7 @@ from services.chat_generation import (
     ChatGenerationAlreadyRunningError,
     ChatGenerationJob,
     build_generation_key,
+    get_generation_job,
     has_active_generation,
     start_generation_job,
 )
@@ -392,6 +393,45 @@ async def get_chat_history(request: Request):
         return jsonify({"messages": messages})
 
 
+@chat_bp.get("/api/chat_generation_stream", name="chat.chat_generation_stream")
+async def chat_generation_stream(request: Request):
+    await run_blocking(cleanup_ephemeral_chats)
+    chat_room_id = request.query_params.get("room_id")
+    if not chat_room_id:
+        return jsonify({"error": "room_id is required"}, status_code=400)
+
+    session = request.session
+    sid = None
+    user_id = session.get("user_id")
+
+    if user_id is not None:
+        try:
+            payload, status_code = await run_blocking(
+                validate_room_owner,
+                chat_room_id,
+                user_id,
+                "他ユーザーのチャット履歴は見れません",
+            )
+            if payload is not None:
+                return jsonify(payload, status_code=status_code)
+        except Exception:
+            return log_and_internal_server_error(
+                logger,
+                "Failed to validate chat room ownership before generation stream.",
+            )
+    else:
+        sid = get_session_id(session)
+        if not await run_blocking(ephemeral_store.room_exists, sid, chat_room_id):
+            return jsonify({"error": "該当ルームが存在しません"}, status_code=404)
+
+    generation_key = build_generation_key(chat_room_id=chat_room_id, user_id=user_id, sid=sid)
+    job = get_generation_job(generation_key)
+    if job is None:
+        return jsonify({"error": "生成ジョブが見つかりません"}, status_code=404)
+
+    return _build_llm_stream_response(job)
+
+
 @chat_bp.get("/api/chat_generation_status", name="chat.chat_generation_status")
 async def chat_generation_status(request: Request):
     await run_blocking(cleanup_ephemeral_chats)
@@ -424,4 +464,7 @@ async def chat_generation_status(request: Request):
             return jsonify({"error": "該当ルームが存在しません"}, status_code=404)
 
     generation_key = build_generation_key(chat_room_id=chat_room_id, user_id=user_id, sid=sid)
-    return jsonify({"is_generating": has_active_generation(generation_key)})
+    job = get_generation_job(generation_key)
+    is_generating = job is not None and not job.is_done
+    has_replayable_job = job is not None
+    return jsonify({"is_generating": is_generating, "has_replayable_job": has_replayable_job})

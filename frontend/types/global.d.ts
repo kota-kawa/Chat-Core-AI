@@ -47,7 +47,8 @@ declare global {
     renderBotMessageImmediate?: (text: string) => void;
     startStreamingBotMessage?: () => StreamingBotMessageHandle | null;
     displayMessage?: (text: string, sender: string) => void;
-    loadChatHistory?: () => void;
+    loadChatHistory?: (shouldPollStatus?: boolean) => void;
+    connectToGenerationStream?: (roomId: string) => Promise<void>;
     loadLocalChatHistory?: () => void;
     saveMessageToLocalStorage?: (text: string, sender: string) => void;
     loadChatRooms?: () => void;

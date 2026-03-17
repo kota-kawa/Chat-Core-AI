@@ -67,33 +67,93 @@ function loadChatHistory(shouldPollStatus = true) {
   const roomId = window.currentChatRoomId;
   fetch(`/api/get_chat_history?room_id=${encodeURIComponent(roomId)}`)
     .then((r) => r.json())
-    .then((data) => {
+    .then(async (data) => {
       if (data.error) {
         console.error("get_chat_history:", data.error);
         return;
       }
       if (!window.chatMessages) return;
-      window.chatMessages.innerHTML = "";
-      const msgs = Array.isArray(data.messages) ? data.messages : [];
-      msgs.forEach((m: { message: string; sender: string }) => {
-        if (window.displayMessage) window.displayMessage(m.message, m.sender);
-      });
 
-      if (window.scrollMessageToBottom) {
-        window.scrollMessageToBottom();
-      } else if (window.chatMessages.lastElementChild && window.scrollMessageToTop) {
-        window.scrollMessageToTop(window.chatMessages.lastElementChild as HTMLElement);
+      const msgs: { message: string; sender: string }[] = Array.isArray(data.messages) ? data.messages : [];
+
+      const scrollToBottom = () => {
+        if (window.scrollMessageToBottom) {
+          window.scrollMessageToBottom();
+        } else if (window.chatMessages?.lastElementChild && window.scrollMessageToTop) {
+          window.scrollMessageToTop(window.chatMessages.lastElementChild as HTMLElement);
+        }
+      };
+
+      const renderMsgs = (list: { message: string; sender: string }[]) => {
+        list.forEach((m) => {
+          if (window.displayMessage) window.displayMessage(m.message, m.sender);
+        });
+      };
+
+      const saveToLocalStorage = (list: { message: string; sender: string }[]) => {
+        localStorage.setItem(
+          `chatHistory_${roomId}`,
+          JSON.stringify(list.map((m) => ({ text: m.message, sender: m.sender })))
+        );
+      };
+
+      if (!shouldPollStatus) {
+        window.chatMessages.innerHTML = "";
+        saveToLocalStorage(msgs);
+        renderMsgs(msgs);
+        scrollToBottom();
+        stopChatGenerationPolling();
+        return;
       }
 
-      localStorage.setItem(
-        `chatHistory_${roomId}`,
-        JSON.stringify(msgs.map((m: { message: string; sender: string }) => ({ text: m.message, sender: m.sender })))
-      );
+      // 生成ステータスを確認
+      let isGenerating = false;
+      let hasReplayableJob = false;
+      try {
+        const statusResp = await fetch(`/api/chat_generation_status?room_id=${encodeURIComponent(roomId)}`);
+        const statusData = await statusResp.json();
+        if (!statusData.error) {
+          isGenerating = statusData.is_generating === true;
+          hasReplayableJob = statusData.has_replayable_job === true;
+        }
+      } catch {
+        // ステータス取得失敗時は通常描画にフォールバック
+      }
 
-      if (shouldPollStatus) {
-        pollChatGenerationStatus(roomId, true);
+      // ルーム切替が起きていたら中断
+      if (window.currentChatRoomId !== roomId) return;
+
+      window.chatMessages.innerHTML = "";
+      stopChatGenerationPolling();
+
+      if (isGenerating) {
+        // 生成中: 最後のbotメッセージはまだDBにないので全メッセージをそのまま表示
+        saveToLocalStorage(msgs);
+        renderMsgs(msgs);
+        scrollToBottom();
+        window.connectToGenerationStream?.(roomId);
+      } else if (hasReplayableJob) {
+        // 生成完了直後: 最後のassistantメッセージを除いて表示し、ストリームで再生
+        let lastAssistantIdx = -1;
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          if (msgs[i].sender === "assistant") {
+            lastAssistantIdx = i;
+            break;
+          }
+        }
+        const msgsWithoutLast =
+          lastAssistantIdx >= 0
+            ? [...msgs.slice(0, lastAssistantIdx), ...msgs.slice(lastAssistantIdx + 1)]
+            : msgs;
+        saveToLocalStorage(msgsWithoutLast);
+        renderMsgs(msgsWithoutLast);
+        scrollToBottom();
+        window.connectToGenerationStream?.(roomId);
       } else {
-        stopChatGenerationPolling();
+        // 通常: 全メッセージ表示
+        saveToLocalStorage(msgs);
+        renderMsgs(msgs);
+        scrollToBottom();
       }
     })
     .catch((err) => console.error("履歴取得失敗:", err));

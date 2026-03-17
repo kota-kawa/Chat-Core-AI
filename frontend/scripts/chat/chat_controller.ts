@@ -572,8 +572,26 @@ async function generateResponse(message: string, aiModel: string) {
   }
 }
 
+/* ページ復帰時にバックグラウンド生成ジョブへ再接続してストリーミング表示する */
+async function connectToGenerationStream(roomId: string): Promise<void> {
+  const thinkingWrap = createThinkingPlaceholder();
+  try {
+    const response = await fetch(`/api/chat_generation_stream?room_id=${encodeURIComponent(roomId)}`);
+    if (!response.ok) {
+      thinkingWrap?.remove();
+      window.loadChatHistory?.(false);
+      return;
+    }
+    await consumeStreamingChatResponse(response, thinkingWrap);
+  } catch {
+    thinkingWrap?.remove();
+    window.loadChatHistory?.(false);
+  }
+}
+
 // ---- window へ公開 ------------------------------
 window.sendMessage = sendMessage;
 window.generateResponse = generateResponse;
+window.connectToGenerationStream = connectToGenerationStream;
 
 export {};
