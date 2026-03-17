@@ -1,13 +1,71 @@
 // chat_history.ts – 履歴のロード／保存
 // --------------------------------------------------
 
+let chatGenerationPollTimer: number | null = null;
+
+function stopChatGenerationPolling() {
+  if (chatGenerationPollTimer === null) return;
+  window.clearTimeout(chatGenerationPollTimer);
+  chatGenerationPollTimer = null;
+}
+
+function pollChatGenerationStatus(roomId: string, refreshHistoryOnCompletion = false) {
+  stopChatGenerationPolling();
+
+  const poll = () => {
+    if (window.currentChatRoomId !== roomId) {
+      stopChatGenerationPolling();
+      return;
+    }
+
+    fetch(`/api/chat_generation_status?room_id=${encodeURIComponent(roomId)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (window.currentChatRoomId !== roomId) {
+          stopChatGenerationPolling();
+          return;
+        }
+
+        if (data.error) {
+          console.error("chat_generation_status:", data.error);
+          stopChatGenerationPolling();
+          return;
+        }
+
+        if (data.is_generating) {
+          chatGenerationPollTimer = window.setTimeout(
+            () => pollChatGenerationStatus(roomId, refreshHistoryOnCompletion),
+            1500
+          );
+          return;
+        }
+
+        stopChatGenerationPolling();
+        if (refreshHistoryOnCompletion) {
+          loadChatHistory(false);
+        }
+      })
+      .catch((err) => {
+        console.error("生成状態取得失敗:", err);
+        chatGenerationPollTimer = window.setTimeout(
+          () => pollChatGenerationStatus(roomId, refreshHistoryOnCompletion),
+          2500
+        );
+      });
+  };
+
+  chatGenerationPollTimer = window.setTimeout(poll, 0);
+}
+
 /* サーバーから履歴取得 */
-function loadChatHistory() {
+function loadChatHistory(shouldPollStatus = true) {
   if (!window.currentChatRoomId) {
+    stopChatGenerationPolling();
     if (window.chatMessages) window.chatMessages.innerHTML = "";
     return;
   }
-  fetch(`/api/get_chat_history?room_id=${window.currentChatRoomId}`)
+  const roomId = window.currentChatRoomId;
+  fetch(`/api/get_chat_history?room_id=${encodeURIComponent(roomId)}`)
     .then((r) => r.json())
     .then((data) => {
       if (data.error) {
@@ -28,9 +86,15 @@ function loadChatHistory() {
       }
 
       localStorage.setItem(
-        `chatHistory_${window.currentChatRoomId}`,
+        `chatHistory_${roomId}`,
         JSON.stringify(msgs.map((m: { message: string; sender: string }) => ({ text: m.message, sender: m.sender })))
       );
+
+      if (shouldPollStatus) {
+        pollChatGenerationStatus(roomId, true);
+      } else {
+        stopChatGenerationPolling();
+      }
     })
     .catch((err) => console.error("履歴取得失敗:", err));
 }

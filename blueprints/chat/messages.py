@@ -3,6 +3,7 @@ import json
 import html
 import logging
 from collections.abc import Iterator
+from functools import partial
 from datetime import date
 from typing import Any
 
@@ -16,10 +17,16 @@ from services.chat_service import (
     get_chat_room_messages,
     validate_room_owner,
 )
+from services.chat_generation import (
+    ChatGenerationAlreadyRunningError,
+    ChatGenerationJob,
+    build_generation_key,
+    has_active_generation,
+    start_generation_job,
+)
 from services.llm_daily_limit import consume_llm_daily_quota
 from services.llm import (
     get_llm_response,
-    get_llm_response_stream,
     GEMINI_DEFAULT_MODEL,
     LlmInvalidModelError,
     LlmServiceError,
@@ -75,58 +82,22 @@ def _sse_event(event: str, payload: dict[str, Any]) -> bytes:
 
 
 def _iter_llm_stream_events(
-    conversation_messages: list[dict[str, str]],
-    model: str,
-    *,
-    chat_room_id: str,
-    is_authenticated: bool,
-    sid: str | None,
+    job: ChatGenerationJob,
 ) -> Iterator[bytes]:
-    # LLM 応答を SSE で配信し、配信完了後に履歴へ保存する
-    # Stream LLM output via SSE and persist the final message on completion.
-    chunks: list[str] = []
-    try:
-        for chunk in get_llm_response_stream(conversation_messages, model):
-            chunks.append(chunk)
-            yield _sse_event("chunk", {"text": chunk})
-    except LlmServiceError:
-        yield _sse_event("error", {"message": "内部エラーが発生しました。"})
-        return
-
-    bot_reply = "".join(chunks)
-
-    try:
-        if is_authenticated:
-            save_message_to_db(chat_room_id, bot_reply, "assistant")
-        elif sid is not None:
-            ephemeral_store.append_message(sid, chat_room_id, "assistant", bot_reply)
-    except Exception:
-        logger.exception("Failed to persist streamed LLM response.")
-        yield _sse_event("error", {"message": "応答は生成されましたが、履歴保存に失敗しました。"})
-        return
-
-    yield _sse_event("done", {"response": bot_reply})
+    # 生成ジョブのイベント列を SSE として配信する
+    # Convert background generation job events into SSE payloads.
+    for event in job.iter_events():
+        yield _sse_event(event.event, event.payload)
 
 
 def _build_llm_stream_response(
-    conversation_messages: list[dict[str, str]],
-    model: str,
-    *,
-    chat_room_id: str,
-    is_authenticated: bool,
-    sid: str | None,
+    job: ChatGenerationJob,
 ) -> StreamingResponse:
-    # 同期ジェネレータを StreamingResponse でラップして SSE 配信する
-    # Wrap the sync generator with StreamingResponse for SSE delivery.
+    # バックグラウンド生成ジョブを StreamingResponse へ変換して SSE 配信する
+    # Wrap the background generation job with StreamingResponse for SSE delivery.
 
     return StreamingResponse(
-        _iter_llm_stream_events(
-            conversation_messages,
-            model,
-            chat_room_id=chat_room_id,
-            is_authenticated=is_authenticated,
-            sid=sid,
-        ),
+        _iter_llm_stream_events(job),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -229,12 +200,13 @@ async def chat(request: Request):
     match = re.match(r"【状況・作業環境】(.+)\n【リクエスト】(.+)", user_message)
 
     sid = None
+    user_id = session.get("user_id")
     if "user_id" in session:
         try:
             payload, status_code = await run_blocking(
                 validate_room_owner,
                 chat_room_id,
-                session["user_id"],
+                user_id,
                 "他ユーザーのチャットルームには投稿できません",
             )
             if payload is not None:
@@ -319,6 +291,13 @@ async def chat(request: Request):
 
     conversation_messages += all_messages
 
+    generation_key = build_generation_key(chat_room_id=chat_room_id, user_id=user_id, sid=sid)
+    if has_active_generation(generation_key):
+        return jsonify(
+            {"error": "このチャットルームでは回答を生成中です。完了までお待ちください。"},
+            status_code=409,
+        )
+
     can_access_llm, _, daily_limit = await run_blocking(consume_llm_daily_quota)
     if not can_access_llm:
         return jsonify(
@@ -332,13 +311,26 @@ async def chat(request: Request):
         )
 
     if is_streaming_model(model):
-        return _build_llm_stream_response(
-            conversation_messages,
-            model,
-            chat_room_id=chat_room_id,
-            is_authenticated="user_id" in session,
-            sid=sid,
+        persist_response = (
+            partial(save_message_to_db, chat_room_id, sender="assistant")
+            if "user_id" in session
+            else partial(ephemeral_store.append_message, sid, chat_room_id, "assistant")
         )
+
+        try:
+            job = start_generation_job(
+                generation_key,
+                conversation_messages=conversation_messages,
+                model=model,
+                persist_response=persist_response,
+            )
+        except ChatGenerationAlreadyRunningError:
+            return jsonify(
+                {"error": "このチャットルームでは回答を生成中です。完了までお待ちください。"},
+                status_code=409,
+            )
+
+        return _build_llm_stream_response(job)
 
     try:
         bot_reply = await run_blocking(get_llm_response, conversation_messages, model)
@@ -398,3 +390,38 @@ async def get_chat_history(request: Request):
 
         messages = await run_blocking(ephemeral_store.get_messages, sid, chat_room_id)
         return jsonify({"messages": messages})
+
+
+@chat_bp.get("/api/chat_generation_status", name="chat.chat_generation_status")
+async def chat_generation_status(request: Request):
+    await run_blocking(cleanup_ephemeral_chats)
+    chat_room_id = request.query_params.get("room_id")
+    if not chat_room_id:
+        return jsonify({"error": "room_id is required"}, status_code=400)
+
+    session = request.session
+    sid = None
+    user_id = session.get("user_id")
+
+    if user_id is not None:
+        try:
+            payload, status_code = await run_blocking(
+                validate_room_owner,
+                chat_room_id,
+                user_id,
+                "他ユーザーのチャット履歴は見れません",
+            )
+            if payload is not None:
+                return jsonify(payload, status_code=status_code)
+        except Exception:
+            return log_and_internal_server_error(
+                logger,
+                "Failed to validate chat room ownership before generation status fetch.",
+            )
+    else:
+        sid = get_session_id(session)
+        if not await run_blocking(ephemeral_store.room_exists, sid, chat_room_id):
+            return jsonify({"error": "該当ルームが存在しません"}, status_code=404)
+
+    generation_key = build_generation_key(chat_room_id=chat_room_id, user_id=user_id, sid=sid)
+    return jsonify({"is_generating": has_active_generation(generation_key)})
