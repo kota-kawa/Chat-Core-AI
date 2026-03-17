@@ -360,8 +360,16 @@ function appendConstellationLoader(parent: HTMLElement, modifierClass: string) {
   return loader;
 }
 
+function shouldAutoScrollForGeneration() {
+  if (window.isChatViewportNearBottom) {
+    return window.isChatViewportNearBottom();
+  }
+  return true;
+}
+
 function createThinkingPlaceholder() {
   if (!window.chatMessages) return null;
+  const shouldScrollToBottom = shouldAutoScrollForGeneration();
 
   const wrapper = document.createElement("div");
   wrapper.className = "message-wrapper bot-message-wrapper thinking-message-wrapper";
@@ -377,10 +385,12 @@ function createThinkingPlaceholder() {
   window.chatMessages.appendChild(wrapper);
   setupZodiacLoader(loader);
 
-  if (window.scrollMessageToBottom) {
-    window.scrollMessageToBottom();
-  } else if (window.scrollMessageToTop) {
-    window.scrollMessageToTop(wrapper);
+  if (shouldScrollToBottom) {
+    if (window.scrollMessageToBottom) {
+      window.scrollMessageToBottom();
+    } else if (window.scrollMessageToTop) {
+      window.scrollMessageToTop(wrapper);
+    }
   }
 
   return wrapper;

@@ -40,6 +40,7 @@ declare global {
     formatLLMOutput?: (text: string) => string;
     renderSanitizedHTML?: (element: HTMLElement, dirtyHtml: string, allowed?: string[]) => void;
     setTextWithLineBreaks?: (element: HTMLElement, text: string) => void;
+    isChatViewportNearBottom?: (thresholdPx?: number) => boolean;
     scrollMessageToTop?: (element: HTMLElement) => void;
     scrollMessageToBottom?: () => void;
     copyTextToClipboard?: (text: string) => Promise<void>;

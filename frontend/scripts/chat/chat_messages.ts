@@ -15,7 +15,15 @@ function isScrollViewportNearBottom(container: HTMLElement, thresholdPx = STICKY
   return distanceToBottom <= thresholdPx;
 }
 
-function createBotMessageElements() {
+function getShouldStickToBottom(container: HTMLElement) {
+  if (window.isChatViewportNearBottom) {
+    return window.isChatViewportNearBottom(STICKY_SCROLL_BOTTOM_THRESHOLD_PX);
+  }
+  return isScrollViewportNearBottom(container);
+}
+
+function createBotMessageElements(options: { scrollToBottom?: boolean } = {}) {
+  const { scrollToBottom = true } = options;
   if (!window.chatMessages) return null;
   const wrapper = document.createElement("div");
   wrapper.className = "message-wrapper bot-message-wrapper";
@@ -29,10 +37,12 @@ function createBotMessageElements() {
 
   wrapper.append(copyBtn, msg);
   window.chatMessages.appendChild(wrapper);
-  if (window.scrollMessageToBottom) {
-    window.scrollMessageToBottom();
-  } else if (window.scrollMessageToTop) {
-    window.scrollMessageToTop(wrapper);
+  if (scrollToBottom) {
+    if (window.scrollMessageToBottom) {
+      window.scrollMessageToBottom();
+    } else if (window.scrollMessageToTop) {
+      window.scrollMessageToTop(wrapper);
+    }
   }
 
   return { wrapper, msg };
@@ -97,19 +107,23 @@ function renderUserMessage(text: string) {
 
 /* Bot メッセージを即時描画 */
 function renderBotMessageImmediate(text: string) {
-  const elements = createBotMessageElements();
+  if (!window.chatMessages) return;
+  const shouldStickToBottom = getShouldStickToBottom(window.chatMessages);
+  const elements = createBotMessageElements({ scrollToBottom: shouldStickToBottom });
   if (!elements) return;
   const { wrapper, msg } = elements;
   msg.dataset.fullText = text;
-  renderBotMessage(wrapper, msg, text);
+  renderBotMessage(wrapper, msg, text, { scrollToBottom: shouldStickToBottom });
   if (window.saveMessageToLocalStorage) window.saveMessageToLocalStorage(text, "bot");
 }
 
 function startStreamingBotMessage(): StreamingBotMessageHandle | null {
-  const elements = createBotMessageElements();
-  if (!elements || !window.chatMessages) return null;
-  const { wrapper, msg } = elements;
+  if (!window.chatMessages) return null;
   const scrollContainer = window.chatMessages;
+  const shouldStickToBottomAtStart = getShouldStickToBottom(scrollContainer);
+  const elements = createBotMessageElements({ scrollToBottom: shouldStickToBottomAtStart });
+  if (!elements) return null;
+  const { wrapper, msg } = elements;
   wrapper.classList.add("message-wrapper--streaming");
   msg.classList.add("bot-message--streaming");
   const formattedContent = document.createElement("div");
@@ -128,7 +142,7 @@ function startStreamingBotMessage(): StreamingBotMessageHandle | null {
   let lastChunkReceivedAt: number | null = null;
   let typingCharsPerMs = 0.042;
   let isProgrammaticScroll = false;
-  let shouldStickToBottom = isScrollViewportNearBottom(scrollContainer);
+  let shouldStickToBottom = shouldStickToBottomAtStart;
   let isCompleted = false;
   let isFinalized = false;
 
@@ -142,7 +156,7 @@ function startStreamingBotMessage(): StreamingBotMessageHandle | null {
 
   const handleScroll = () => {
     if (isProgrammaticScroll) return;
-    shouldStickToBottom = isScrollViewportNearBottom(scrollContainer);
+    shouldStickToBottom = getShouldStickToBottom(scrollContainer);
   };
 
   scrollContainer.addEventListener("scroll", handleScroll, { passive: true });

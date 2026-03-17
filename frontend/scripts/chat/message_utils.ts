@@ -172,7 +172,16 @@ function setTextWithLineBreaks(element: HTMLElement, text: string) {
   });
 }
 
-// 新しいメッセージを常に表示領域の末尾へ追従
+const CHAT_SCROLL_BOTTOM_THRESHOLD_PX = 72;
+
+function isChatViewportNearBottom(thresholdPx = CHAT_SCROLL_BOTTOM_THRESHOLD_PX) {
+  const container = window.chatMessages;
+  if (!container) return true;
+  const distanceToBottom = container.scrollHeight - (container.scrollTop + container.clientHeight);
+  return distanceToBottom <= thresholdPx;
+}
+
+// 新しいメッセージを表示領域の末尾へ追従
 function scrollMessageToBottom() {
   if (!window.chatMessages) return;
   window.chatMessages.scrollTop = window.chatMessages.scrollHeight;
@@ -261,6 +270,7 @@ function createCopyBtn(getText: () => string) {
 // ---- window へ公開 ------------------------------
 window.renderSanitizedHTML = renderSanitizedHTML;
 window.setTextWithLineBreaks = setTextWithLineBreaks;
+window.isChatViewportNearBottom = isChatViewportNearBottom;
 // 既存呼び出し互換のために旧名も残す
 window.scrollMessageToBottom = scrollMessageToBottom;
 window.scrollMessageToTop = scrollMessageToBottom;
