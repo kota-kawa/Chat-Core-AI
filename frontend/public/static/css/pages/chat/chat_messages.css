@@ -14,6 +14,8 @@
 .chat-messages {
   flex: 1;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
   padding: 1.5rem 1.5rem 1.5rem;
   background: var(--surface-primary, #fff);
   display: flex;
@@ -63,19 +65,6 @@
   max-width: 92%;
   width: 92%;
   min-width: 0;
-}
-
-@media (max-width: 960px) {
-  .chat-messages {
-    padding-top: 4.75rem;
-  }
-
-  .message-wrapper,
-  .user-message-wrapper,
-  .bot-message-wrapper {
-    max-width: 100%;
-    width: 100%;
-  }
 }
 
 /* バブル */
@@ -271,6 +260,7 @@
   background: transparent !important;
   border: none;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   line-height: 1.55;
 }
 
@@ -329,11 +319,15 @@
 .hljs-strong { font-weight: bold; }
 .hljs-link { text-decoration: underline; }
 
+/* テーブルをモバイルで横スクロール対応 */
 .bot-message table {
   border-collapse: collapse;
   margin: 0.65rem 0;
   width: 100%;
   font-size: 0.9rem;
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .bot-message th,
@@ -341,6 +335,7 @@
   border: 1px solid var(--border-default, rgba(0, 0, 0, 0.1));
   padding: 0.45rem 0.6rem;
   text-align: left;
+  white-space: nowrap;
 }
 
 .bot-message th {
@@ -496,13 +491,137 @@
   }
 }
 
+/* ─── タブレット (≤960px) ─── */
+@media (max-width: 960px) {
+  .bot-message-wrapper {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .user-message-wrapper {
+    max-width: 88%;
+  }
+
+  /* コピーボタンをバブル内側に配置 */
+  .user-message-wrapper .copy-btn {
+    left: auto;
+    right: 0.5rem;
+    top: -1.5rem;
+  }
+
+  .bot-message-wrapper .copy-btn {
+    right: 0.5rem;
+    top: -1.5rem;
+  }
+}
+
+/* ─── スマートフォン (≤576px) ─── */
 @media (max-width: 576px) {
   .chat-messages {
     flex: 1;
     max-height: unset;
-    padding: 1rem;
+    padding: 0.75rem 0.85rem;
+    gap: 0.15rem;
   }
 
+  .message-wrapper {
+    margin-bottom: 0.6rem;
+  }
+
+  .user-message-wrapper {
+    max-width: 85%;
+  }
+
+  .bot-message-wrapper {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .user-message {
+    padding: 0.65rem 0.9rem;
+    font-size: 0.9rem;
+    border-radius: 18px 18px 4px 18px;
+  }
+
+  .bot-message {
+    font-size: 0.9rem;
+    padding: 0.15rem 0;
+  }
+
+  .bot-message h1 {
+    font-size: 1.2rem;
+  }
+
+  .bot-message h2 {
+    font-size: 1.1rem;
+  }
+
+  .bot-message h3 {
+    font-size: 1rem;
+  }
+
+  .bot-message pre {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+  }
+
+  .bot-message pre code {
+    font-size: 0.78rem;
+  }
+
+  .bot-message code {
+    font-size: 0.84em;
+  }
+
+  .code-block-container {
+    margin: 0.6rem -0.2rem;
+    border-radius: 6px;
+  }
+
+  .code-block-header {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.7rem;
+  }
+
+  .code-block-copy-btn span {
+    display: none;
+  }
+
+  .bot-message blockquote {
+    padding: 0.45rem 0.75rem;
+    margin: 0.5rem 0;
+  }
+
+  .bot-message ul,
+  .bot-message ol {
+    margin-left: 0.5rem;
+    padding-left: 0.7rem;
+  }
+
+  .bot-message th,
+  .bot-message td {
+    padding: 0.35rem 0.45rem;
+    font-size: 0.82rem;
+  }
+
+  /* コピーボタンをバブルの右上に小さく配置 */
+  .copy-btn {
+    font-size: 1rem;
+    padding: 0.35rem;
+  }
+
+  .user-message-wrapper .copy-btn {
+    left: auto;
+    right: 0.25rem;
+    top: -1.3rem;
+  }
+
+  .bot-message-wrapper .copy-btn {
+    right: 0.25rem;
+    top: -1.3rem;
+  }
+
+  /* Thinking message */
   .thinking-message-wrapper {
     max-width: 14.2rem;
   }

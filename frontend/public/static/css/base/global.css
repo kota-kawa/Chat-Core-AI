@@ -15,6 +15,16 @@ html {
   text-rendering: optimizeLegibility;
 }
 
+/* タッチ端末でタップ時のハイライトを抑制 */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* サイドバー表示時にbodyスクロールを止める */
+body.sidebar-visible {
+  overflow: hidden;
+}
+
 ::selection {
   background: rgba(25, 195, 125, 0.2);
   color: inherit;

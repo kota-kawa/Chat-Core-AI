@@ -225,20 +225,22 @@
     .sidebar-toggle{
       display:inline-flex;                /* モバイルで表示 */
     }
-    /* アイコンの線を太く */
-    .sidebar-toggle i {
-      -webkit-text-stroke: 1px currentColor;
-      text-stroke: 1px currentColor;
-    }
 
     /* ボタンにプレス時のトランジションを設定 */
     .sidebar-toggle {
       transition: transform 0.1s ease, background-color 0.1s ease;
+      -webkit-tap-highlight-color: transparent;
+      /* タッチ向け最小サイズ */
+      min-width: 44px;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
 
     /* 押下時に縮小＆背景色変化で押した感を演出 */
     .sidebar-toggle:active {
       transform: scale(0.9);
-      background-color: rgba(0, 0, 0, 0.1);
+      background-color: rgba(255, 255, 255, 0.15);
     }
   }

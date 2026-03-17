@@ -7,6 +7,8 @@
   padding: 0.85rem;
   border-right: 1px solid var(--border-default, rgba(0, 0, 0, 0.08));
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
@@ -33,7 +35,9 @@
 /* ルームカード */
 .chat-room-card {
   background: transparent;
+  /* タッチ端末で十分なタップ領域を確保 (min 44px) */
   padding: 0.7rem 0.85rem;
+  min-height: 44px;
   border-radius: var(--radius-sm, 8px);
   cursor: pointer;
   border: 1px solid transparent;
@@ -48,6 +52,7 @@
   box-shadow: none;
   font-size: 0.9rem;
   color: var(--text-dark, #1a1a1a);
+  -webkit-tap-highlight-color: transparent;
 }
 
 .chat-room-card span {
@@ -64,6 +69,11 @@
   box-shadow: none;
 }
 
+/* タッチフィードバック */
+.chat-room-card:active {
+  background: rgba(0, 0, 0, 0.07);
+}
+
 .chat-room-card.active {
   background: var(--primary-color, #19c37d);
   color: #fff;
@@ -75,12 +85,20 @@
   background: var(--primary-hover, #15a86b);
 }
 
+.chat-room-card.active:active {
+  background: #139259;
+}
+
 .room-actions-icon {
   cursor: pointer;
   margin-left: 8px;
   font-size: 1.1em;
   opacity: 0;
   transition: opacity var(--transition-fast, 0.15s ease);
+  /* タップ可能範囲を広げる */
+  padding: 0.3rem;
+  margin: -0.3rem -0.3rem -0.3rem 0.2rem;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .chat-room-card:hover .room-actions-icon,
@@ -108,13 +126,56 @@
 }
 
 .room-actions-menu .menu-item {
-  padding: 0.5rem 0.85rem;
+  padding: 0.55rem 0.9rem;
   white-space: nowrap;
   cursor: pointer;
   font-size: 0.85rem;
   transition: background var(--transition-fast, 0.15s ease);
+  /* タッチ端末用 min-height */
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .room-actions-menu .menu-item:hover {
   background: var(--primary-subtle, rgba(25, 195, 125, 0.08));
+}
+
+.room-actions-menu .menu-item:active {
+  background: rgba(25, 195, 125, 0.15);
+}
+
+/* ─── モバイル (≤960px) タッチ向け調整 ─── */
+@media (max-width: 960px) {
+  /* タッチ端末ではアクションアイコンを常に表示 */
+  .room-actions-icon {
+    opacity: 0.5;
+  }
+
+  .chat-room-card.active .room-actions-icon {
+    opacity: 0.85;
+  }
+}
+
+/* ─── スマートフォン (≤576px) ─── */
+@media (max-width: 576px) {
+  .sidebar {
+    padding: 0.75rem 0.65rem;
+  }
+
+  .chat-room-card {
+    padding: 0.75rem 0.8rem;
+    font-size: 0.88rem;
+    border-radius: 6px;
+  }
+
+  .room-actions-menu {
+    right: auto;
+    left: 0;
+    top: 100%;
+    transform: none;
+    min-width: 140px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  }
 }

@@ -8,22 +8,7 @@
   position: sticky;
   bottom: 0;
   z-index: 1000;
-}
-
-/* モバイル表示での入力フォーム固定 */
-@media (max-width: 576px) {
-  .input-container {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 1100;
-    padding: 0.6rem 0.75rem 0.75rem;
-  }
-
-  .chat-messages {
-    padding-bottom: 5rem;
-  }
+  flex-shrink: 0;
 }
 
 .input-wrapper {
@@ -52,11 +37,16 @@
   flex: 1;
   padding: 0.55rem 0.5rem;
   border: none;
-  font-size: 0.95rem;
+  /* iOS で入力時のズームを防止（16px 以上） */
+  font-size: 1rem;
   background: transparent;
   color: var(--text-dark, #1a1a1a);
   outline: none;
   line-height: 1.5;
+  /* iOS のデフォルトスタイルをリセット */
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 0;
 }
 
 #user-input::placeholder {
@@ -80,6 +70,8 @@
     background var(--transition-fast, 0.15s ease),
     transform var(--transition-fast, 0.15s ease);
   box-shadow: none;
+  /* タッチフィードバック */
+  -webkit-tap-highlight-color: transparent;
 }
 
 #send-btn:hover {
@@ -89,13 +81,53 @@
 }
 
 #send-btn:active {
-  transform: scale(0.92);
+  transform: scale(0.88);
 }
 
 #send-btn i {
   font-size: 0.95rem;
   position: relative;
   left: -1px;
+}
+
+/* ─── スマートフォン (≤576px) ─── */
+@media (max-width: 576px) {
+  .input-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1100;
+    /* safe-area対応（iPhoneのホームインジケータ） */
+    padding: 0.5rem 0.65rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
+    background: var(--surface-primary, #fff);
+    border-top: 1px solid var(--border-light, rgba(0, 0, 0, 0.05));
+  }
+
+  /* 固定inputの高さ分の余白をmessagesに追加 */
+  .chat-messages {
+    /* input高さ(~56px) + safe-area分 */
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .input-wrapper {
+    padding: 0.25rem 0.35rem 0.25rem 0.9rem;
+    border-radius: 22px;
+  }
+
+  #user-input {
+    padding: 0.45rem 0.4rem;
+    font-size: 1rem;
+  }
+
+  #send-btn {
+    width: 34px;
+    height: 34px;
+  }
+
+  #send-btn i {
+    font-size: 0.9rem;
+  }
 }
 
 /* ===== Thinking インジケータ (constellation 含む - そのまま保持) ===== */

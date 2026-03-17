@@ -160,18 +160,19 @@ chatTemplate.innerHTML = `
 
     @media (max-width: 768px) {
       .actions-menu {
-        bottom: 100px;
-        right: 20px;
-        width: 56px;
-        height: 56px;
+        /* 固定inputの上に配置 (input ~56px + safe-area + 余白) */
+        bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+        right: 12px;
+        width: 48px;
+        height: 48px;
       }
       .actions-menu .btn--menu {
-        width: 56px !important;
-        height: 56px !important;
+        width: 48px !important;
+        height: 48px !important;
       }
       .actions-menu .btn:not(.btn--menu) {
-        width: 45px;
-        height: 45px;
+        width: 40px;
+        height: 40px;
       }
       .btn svg {
         width: 20px;
@@ -181,18 +182,18 @@ chatTemplate.innerHTML = `
 
     @media (max-width: 480px) {
       .actions-menu {
-        bottom: 90px;
-        right: 15px;
-        width: 50px;
-        height: 50px;
+        bottom: calc(65px + env(safe-area-inset-bottom, 0px));
+        right: 10px;
+        width: 44px;
+        height: 44px;
       }
       .actions-menu .btn--menu {
-        width: 50px !important;
-        height: 50px !important;
+        width: 44px !important;
+        height: 44px !important;
       }
       .actions-menu .btn:not(.btn--menu) {
-        width: 40px;
-        height: 40px;
+        width: 36px;
+        height: 36px;
       }
       .btn svg {
         width: 18px;
