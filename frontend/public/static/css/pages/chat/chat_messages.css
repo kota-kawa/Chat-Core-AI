@@ -8,36 +8,54 @@
   min-width: 0;
   min-height: 0;
   position: relative;
+  background: var(--surface-primary, #fff);
 }
 
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 1.6rem 1.5rem 1.8rem;
-  background:
-    radial-gradient(700px 420px at 0% 0%, rgba(25, 195, 125, 0.08), transparent 55%),
-    linear-gradient(180deg, #f7fbf9 0%, #ffffff 100%);
+  padding: 1.5rem 1.5rem 1.5rem;
+  background: var(--surface-primary, #fff);
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
+  gap: 0.25rem;
   min-width: 0;
   min-height: 0;
+  scroll-behavior: smooth;
+}
+
+/* スクロールバーを上品に */
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.18);
 }
 
 /* メッセージラッパ */
 .message-wrapper {
   position: relative;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   max-width: 85%;
 }
 
 .message-wrapper--streaming {
-  animation: streamMessageAppear 0.28s ease-out;
+  animation: streamMessageAppear 0.3s ease-out;
 }
 
 .user-message-wrapper {
   margin-left: auto;
-  max-width: 80%;
+  max-width: 75%;
 }
 
 .bot-message-wrapper {
@@ -64,21 +82,18 @@
 .user-message,
 .bot-message {
   position: relative;
-  line-height: 1.6;
-  font-size: 0.95rem;
-  padding: 1rem 1.25rem;
-  border-radius: 18px;
-  max-width: 100%;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  line-height: 1.65;
+  font-size: 0.938rem;
 }
 
 .user-message {
-  background: #f4f4f4;
-  color: #333;
-  animation: floatUp 0.5s ease-out;
-  border-radius: 20px;
-  border: 1px solid #e5e5e5;
-  box-shadow: none;
+  background: var(--primary-color, #19c37d);
+  color: #fff;
+  padding: 0.75rem 1.05rem;
+  border-radius: 20px 20px 4px 20px;
+  animation: floatUp 0.4s ease-out;
+  border: none;
+  box-shadow: 0 1px 3px rgba(25, 195, 125, 0.2);
 }
 
 .bot-message {
@@ -91,7 +106,7 @@
   word-break: break-word;
   text-wrap: pretty;
   width: 100%;
-  padding: 0; /* Remove padding for bot messages to feel more like a document */
+  padding: 0.25rem 0;
 }
 
 .bot-message--streaming {
@@ -119,19 +134,18 @@
 .bot-message__stream-tail::after {
   content: "";
   display: inline-block;
-  width: 0.55ch;
-  height: 1.02em;
-  margin-left: 0.12rem;
-  vertical-align: -0.12em;
-  border-radius: 999px;
-  background: #9aa7a1;
-  box-shadow: none;
-  animation: none;
+  width: 2px;
+  height: 1.1em;
+  margin-left: 0.2rem;
+  vertical-align: -0.15em;
+  border-radius: 1px;
+  background: var(--primary-color, #19c37d);
+  animation: streamCaretPulse 1s ease-in-out infinite;
 }
 
 /* Markdown可読性を上げつつ、要素間の余白を詰める */
 .bot-message > * {
-  margin: 0.75rem 0;
+  margin: 0.65rem 0;
 }
 
 .bot-message > :first-child {
@@ -143,7 +157,7 @@
 }
 
 .bot-message p {
-  margin: 0.75rem 0;
+  margin: 0.6rem 0;
 }
 
 .bot-message p + p,
@@ -151,17 +165,17 @@
 .bot-message ol + p,
 .bot-message p + ul,
 .bot-message p + ol {
-  margin-top: 0.85rem;
+  margin-top: 0.75rem;
 }
 
 .bot-message ul,
 .bot-message ol {
-  margin: 0.75rem 0 0.75rem 1.1rem;
+  margin: 0.65rem 0 0.65rem 1rem;
   padding-left: 0.8rem;
 }
 
 .bot-message li + li {
-  margin-top: 0.35rem;
+  margin-top: 0.3rem;
 }
 
 .bot-message h1,
@@ -170,76 +184,81 @@
 .bot-message h4,
 .bot-message h5,
 .bot-message h6 {
-  margin: 1.25rem 0 0.65rem;
-  line-height: 1.4;
-  font-weight: 700;
+  margin: 1.25rem 0 0.5rem;
+  line-height: 1.35;
+  font-weight: 600;
+  color: var(--text-dark, #1a1a1a);
 }
 
 .bot-message h1 {
-  font-size: 1.5rem;
-  border-bottom: 1px solid rgba(25, 195, 125, 0.2);
-  padding-bottom: 0.3rem;
+  font-size: 1.4rem;
+  border-bottom: 1px solid var(--border-default, rgba(0, 0, 0, 0.08));
+  padding-bottom: 0.35rem;
 }
 
 .bot-message h2 {
-  font-size: 1.35rem;
+  font-size: 1.25rem;
 }
 
 .bot-message h3 {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
 }
 
 .bot-message blockquote {
   margin: 0.75rem 0;
   padding: 0.6rem 1rem;
-  border-left: 4px solid rgba(25, 195, 125, 0.55);
-  background: rgba(25, 195, 125, 0.07);
-  border-radius: 0 8px 8px 0;
-  color: #355549;
+  border-left: 3px solid var(--primary-color, #19c37d);
+  background: var(--primary-subtle, rgba(25, 195, 125, 0.06));
+  border-radius: 0 var(--radius-sm, 8px) var(--radius-sm, 8px) 0;
+  color: var(--text-secondary, #6b7280);
   font-style: italic;
 }
 
-/* Code Block Container (ChatGPT-like) */
+/* Code Block Container */
 .code-block-container {
-  margin: 1rem 0;
-  border-radius: 8px;
+  margin: 0.85rem 0;
+  border-radius: var(--radius-sm, 8px);
   overflow: hidden;
-  background: #282c34; /* Atom One Dark background */
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  background: #1e1e2e;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .code-block-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #343a40;
-  padding: 0.4rem 0.8rem;
-  color: #d1d5db;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.4rem 0.85rem;
+  color: rgba(255, 255, 255, 0.55);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   font-size: 0.75rem;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .code-block-lang {
-  font-weight: 600;
+  font-weight: 500;
+  text-transform: uppercase;
 }
 
 .code-block-copy-btn {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.35rem;
   background: transparent;
   border: none;
-  color: #d1d5db;
+  color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
-  padding: 0.2rem 0.4rem;
+  padding: 0.2rem 0.45rem;
   border-radius: 4px;
-  transition: background 0.2s, color 0.2s;
+  font-size: 0.75rem;
+  transition:
+    background var(--transition-fast, 0.15s ease),
+    color var(--transition-fast, 0.15s ease);
 }
 
 .code-block-copy-btn:hover {
   background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .code-block-copy-btn i {
@@ -249,27 +268,27 @@
 .bot-message pre {
   margin: 0;
   padding: 1rem;
-  background: transparent !important; /* Inherit from container */
+  background: transparent !important;
   border: none;
   overflow-x: auto;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .bot-message code {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-  background: rgba(25, 195, 125, 0.12);
-  padding: 0.1rem 0.3rem;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.15rem 0.4rem;
   border-radius: 4px;
-  font-size: 0.9em;
-  color: #e06c75; /* Inline code color for light mode fallback */
+  font-size: 0.88em;
+  color: #d63384;
 }
 
 .bot-message pre code {
   background: transparent;
   padding: 0;
   border-radius: 0;
-  color: #abb2bf; /* Atom One Dark default text color */
-  font-size: 0.85rem;
+  color: #cdd6f4;
+  font-size: 0.84rem;
 }
 
 /* Atom One Dark Theme for highlight.js */
@@ -312,37 +331,46 @@
 
 .bot-message table {
   border-collapse: collapse;
-  margin: 0.55rem 0;
+  margin: 0.65rem 0;
   width: 100%;
-  font-size: 0.92rem;
+  font-size: 0.9rem;
 }
 
 .bot-message th,
 .bot-message td {
-  border: 1px solid rgba(15, 23, 42, 0.15);
-  padding: 0.42rem 0.48rem;
+  border: 1px solid var(--border-default, rgba(0, 0, 0, 0.1));
+  padding: 0.45rem 0.6rem;
   text-align: left;
 }
 
 .bot-message th {
-  background: rgba(25, 195, 125, 0.1);
+  background: var(--primary-subtle, rgba(25, 195, 125, 0.06));
+  font-weight: 600;
+  font-size: 0.85rem;
 }
 
 .bot-message hr {
   border: 0;
-  border-top: 1px solid rgba(15, 23, 42, 0.16);
-  margin: 0.7rem 0;
+  border-top: 1px solid var(--border-default, rgba(0, 0, 0, 0.08));
+  margin: 0.85rem 0;
 }
 
 .bot-message a {
-  color: #0f7d51;
+  color: var(--primary-color, #19c37d);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color var(--transition-fast, 0.15s ease);
+}
+
+.bot-message a:hover {
+  color: var(--primary-hover, #15a86b);
   text-decoration: underline;
   text-underline-offset: 2px;
-  word-break: break-word;
 }
 
 .bot-message strong {
-  font-weight: 650;
+  font-weight: 600;
+  color: var(--text-dark, #1a1a1a);
 }
 
 /* コピーアイコン */
@@ -350,33 +378,44 @@
   position: absolute;
   background: none;
   border: none;
-  color: #666;
-  font-size: 1.3rem;
+  color: var(--text-secondary, #6b7280);
+  font-size: 1.15rem;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity var(--transition-normal, 0.2s ease),
+    color var(--transition-fast, 0.15s ease);
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+
+.copy-btn:hover {
+  color: var(--text-dark, #1a1a1a);
 }
 
 .user-message-wrapper .copy-btn {
-  left: -2rem;
-  top: -0.1rem;
+  left: -1.8rem;
+  top: 0;
 }
 
 .bot-message-wrapper .copy-btn {
-  right: -2rem;
-  top: -0.2rem;
+  right: -1.8rem;
+  top: 0;
 }
 
-.message-wrapper:hover .copy-btn,
+.message-wrapper:hover .copy-btn {
+  opacity: 0.6;
+}
+
 .copy-btn:hover {
-  opacity: 1;
-  transform: translateY(-1px);
+  opacity: 1 !important;
 }
 
 .message-wrapper--streaming .copy-btn {
   pointer-events: none;
 }
 
+/* ── Thinking / constellation ── (そのまま保持) */
 .thinking-message-wrapper {
   width: auto;
   max-width: 16.4rem;
@@ -424,7 +463,7 @@
 @keyframes streamMessageAppear {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -452,8 +491,8 @@
   }
   58%,
   100% {
-    opacity: 0.24;
-    transform: scaleY(0.9);
+    opacity: 0.2;
+    transform: scaleY(0.92);
   }
 }
 

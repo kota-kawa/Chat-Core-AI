@@ -1,45 +1,120 @@
 /* sidebar.css
    Sidebar layout and chat room list card styles. Breakpoints are managed in
    base/responsive.css. */
-.sidebar{
-  width:280px;
-  background: rgba(245, 250, 247, 0.98);
-  padding:1.1rem;
-  border-right:1px solid rgba(25, 195, 125, 0.12);
-  overflow-y:auto;
-  box-shadow: inset -1px 0 0 rgba(25, 195, 125, 0.08);
+.sidebar {
+  width: 280px;
+  background: var(--surface-sidebar, #f7f8f7);
+  padding: 0.85rem;
+  border-right: 1px solid var(--border-default, rgba(0, 0, 0, 0.08));
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
 }
+
+/* スクロールバーを上品に */
+.sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
 /* ルームカード */
-.chat-room-card{
-  background:#fff;
-  padding:.85rem 1rem;
-  border-radius:14px;
-  cursor:pointer;
-  border:1px solid rgba(25, 195, 125, 0.15);
-  margin-bottom:.6rem;
-  transition:transform .2s ease, box-shadow .2s ease, border .2s ease;
-  position:relative;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+.chat-room-card {
+  background: transparent;
+  padding: 0.7rem 0.85rem;
+  border-radius: var(--radius-sm, 8px);
+  cursor: pointer;
+  border: 1px solid transparent;
+  margin-bottom: 0.15rem;
+  transition:
+    background var(--transition-fast, 0.15s ease),
+    border-color var(--transition-fast, 0.15s ease);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: none;
+  font-size: 0.9rem;
+  color: var(--text-dark, #1a1a1a);
 }
-.chat-room-card span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.chat-room-card:hover{
-  transform: translateY(-2px);
-  border-color: rgba(25, 195, 125, 0.35);
-  box-shadow: 0 16px 28px rgba(15, 23, 42, 0.12);
+
+.chat-room-card span {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.chat-room-card.active{
-  background: linear-gradient(135deg, #19c37d 0%, #16a367 100%);
-  color:#fff;
-  border-color: rgba(25, 195, 125, 0.6);
+
+.chat-room-card:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: transparent;
+  transform: none;
+  box-shadow: none;
 }
-.room-actions-icon{cursor:pointer;margin-left:8px;font-size:1.2em;}
-.room-actions-menu{
-  position:absolute;top:50%;right:40px;transform:translateY(-50%);background:#fff;border:1px solid #ddd;border-radius:4px;
-  display:none;flex-direction:column;z-index:10;box-shadow:var(--shadow);
+
+.chat-room-card.active {
+  background: var(--primary-color, #19c37d);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(25, 195, 125, 0.3);
 }
-.chat-room-card.active .room-actions-menu{color:var(--text-dark);}
-.room-actions-menu .menu-item{padding:6px 12px;white-space:nowrap;cursor:pointer;}
-.room-actions-menu .menu-item:hover{background:#eee;}
+
+.chat-room-card.active:hover {
+  background: var(--primary-hover, #15a86b);
+}
+
+.room-actions-icon {
+  cursor: pointer;
+  margin-left: 8px;
+  font-size: 1.1em;
+  opacity: 0;
+  transition: opacity var(--transition-fast, 0.15s ease);
+}
+
+.chat-room-card:hover .room-actions-icon,
+.chat-room-card.active .room-actions-icon {
+  opacity: 1;
+}
+
+.room-actions-menu {
+  position: absolute;
+  top: 50%;
+  right: 40px;
+  transform: translateY(-50%);
+  background: #fff;
+  border: 1px solid var(--border-default, rgba(0, 0, 0, 0.08));
+  border-radius: var(--radius-sm, 8px);
+  display: none;
+  flex-direction: column;
+  z-index: 10;
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.08));
+  overflow: hidden;
+}
+
+.chat-room-card.active .room-actions-menu {
+  color: var(--text-dark);
+}
+
+.room-actions-menu .menu-item {
+  padding: 0.5rem 0.85rem;
+  white-space: nowrap;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background var(--transition-fast, 0.15s ease);
+}
+
+.room-actions-menu .menu-item:hover {
+  background: var(--primary-subtle, rgba(25, 195, 125, 0.08));
+}

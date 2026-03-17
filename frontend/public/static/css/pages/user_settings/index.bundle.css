@@ -13,11 +13,29 @@
 */
 :root {
   --primary-color: #19c37d;
+  --primary-hover: #15a86b;
+  --primary-subtle: rgba(25, 195, 125, 0.08);
+  --primary-border: rgba(25, 195, 125, 0.18);
   --secondary-color: #f5f5f5;
   --accent-color: #ff6b6b;
   --text-dark: #1a1a1a;
+  --text-secondary: #6b7280;
   --text-light: #ffffff;
+  --surface-primary: #ffffff;
+  --surface-secondary: #f9fafb;
+  --surface-sidebar: #f7f8f7;
+  --border-default: rgba(0, 0, 0, 0.08);
+  --border-light: rgba(0, 0, 0, 0.05);
   --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.1);
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
 }
 /* END inlined: public/static/css/base/variables.css */
 /* BEGIN inlined: public/static/css/base/animations.css */
@@ -70,7 +88,7 @@
   width: auto;
   height: auto;
   /* 余白を増量 */
-  padding: 0.25rem;             
+  padding: 0.25rem;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -84,8 +102,6 @@
   height: 2.5rem;
   border-radius: 50%;
   object-fit: cover;
-  /* 画像自体に余白を入れたい場合はこちらでも可 */
-  /* margin: 0.1rem; */
 }
 
 /* prompt-sharing / settings-btn は .circle-button を継承 */
@@ -99,39 +115,49 @@
 /* 新規チャットボタン */
 .new-chat-btn {
   width: 100%;
-  margin-bottom: 1rem;
-  padding: 0.65rem 1rem;
-  font-size: 1rem;
+  margin-bottom: 0.6rem;
+  padding: 0.6rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
   background: var(--primary-color);
   color: white;
   border: none;
-  border-radius: 14px;
+  border-radius: var(--radius-sm, 8px);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  gap: 0.45rem;
+  box-shadow: none;
+  transition:
+    background var(--transition-fast, 0.15s ease),
+    transform var(--transition-fast, 0.15s ease);
 }
 
 .new-chat-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.14);
-  filter: brightness(0.96);
+  background: var(--primary-hover, #15a86b);
+  transform: none;
+  box-shadow: none;
+  filter: none;
+}
+
+.new-chat-btn:active {
+  transform: scale(0.98);
 }
 
 .new-chat-btn i {
-  font-size: 1.2rem;
+  font-size: 1rem;
 }
 
 /* アイコンボタン */
 .icon-button {
-  padding: 0.7rem;
+  padding: 0.55rem;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius-sm, 8px);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition:
+    background var(--transition-fast, 0.15s ease),
+    opacity var(--transition-fast, 0.15s ease);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -139,29 +165,40 @@
   color: white;
 }
 
+.icon-button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
 /* プライマリボタン */
 .primary-button {
   background: var(--primary-color);
   color: white;
-  padding: 0.75rem 1.05rem;
-  border-radius: 14px;
+  padding: 0.65rem 1rem;
+  border-radius: var(--radius-md, 14px);
   border: none;
   cursor: pointer;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  font-size: 0.9rem;
+  font-weight: 500;
+  box-shadow: none;
+  transition:
+    background var(--transition-fast, 0.15s ease),
+    transform var(--transition-fast, 0.15s ease);
 }
 
 .primary-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.14);
-  filter: brightness(0.96);
+  background: var(--primary-hover, #15a86b);
+  transform: none;
+  box-shadow: none;
+  filter: none;
+}
+
+.primary-button:active {
+  transform: scale(0.97);
 }
 
 
 /* ── 未ログイン時のログインボタン ── */
 #auth-buttons .auth-btn {
-  /* ログインボタンの背景が透過していたため、
-     通常の色付き背景になるよう修正 */
   background: var(--primary-color);
   color: var(--text-light);
   border: none;
@@ -172,8 +209,10 @@
   gap: 0.4rem;
   padding: 0.5rem 1.05rem;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+  transition:
+    background var(--transition-fast, 0.15s ease),
+    transform var(--transition-fast, 0.15s ease);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.08));
 }
 
 #auth-buttons .auth-btn i {
@@ -188,8 +227,8 @@
 }
 
 #auth-buttons .auth-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.18);
+  background: var(--primary-hover, #15a86b);
+  transform: none;
 }
 
 @media (max-width: 768px) {
@@ -247,7 +286,7 @@
       margin-bottom: 0;
     }
   }
-  
+
 
   .sidebar-toggle{
     display:none;                         /* PC では非表示 */
@@ -279,24 +318,8 @@
 /* BEGIN inlined: public/static/css/base/responsive.css */
 /* responsive.css
    Shared responsive breakpoints for layout and components.
-   Imported by base.css. */
-@media (max-width: 768px) {
-  .chat-main {
-    flex-direction: column;
-  }
-
-  .sidebar {
-    width: 100%;
-    height: 200px;
-    border-right: none;
-    border-bottom: 1px solid #e0e0e0;
-  }
-
-  .user-message,
-  .bot-message {
-    max-width: 90%;
-  }
-}
+   Imported by base.css.
+   Note: Chat-specific responsive rules live in chat_layout.css (960px, 576px). */
 
 @media (max-width: 576px) {
   body.chat-page {
@@ -305,9 +328,8 @@
   }
 
   .sidebar {
-    padding: .75rem .75rem;
+    padding: 0.75rem;
     border-right: none;
-    border-bottom: 1px solid #e0e0e0;
   }
 }
 /* END inlined: public/static/css/base/responsive.css */
@@ -320,11 +342,19 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: var(--font-app-sans), sans-serif;
+  font-family: var(--font-app-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 html {
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(25, 195, 125, 0.2);
+  color: inherit;
 }
 /* END inlined: public/static/css/base/global.css */
 /* BEGIN inlined: public/static/css/pages/user_settings/user_settings.css */

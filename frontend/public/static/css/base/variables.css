@@ -3,9 +3,27 @@
 */
 :root {
   --primary-color: #19c37d;
+  --primary-hover: #15a86b;
+  --primary-subtle: rgba(25, 195, 125, 0.08);
+  --primary-border: rgba(25, 195, 125, 0.18);
   --secondary-color: #f5f5f5;
   --accent-color: #ff6b6b;
   --text-dark: #1a1a1a;
+  --text-secondary: #6b7280;
   --text-light: #ffffff;
+  --surface-primary: #ffffff;
+  --surface-secondary: #f9fafb;
+  --surface-sidebar: #f7f8f7;
+  --border-default: rgba(0, 0, 0, 0.08);
+  --border-light: rgba(0, 0, 0, 0.05);
   --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.1);
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
 }
