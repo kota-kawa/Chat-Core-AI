@@ -2,10 +2,8 @@ import Head from "next/head";
 import { useEffect } from "react";
 
 const bodyMarkup = `
-<!-- 浮遊メニュー -->
   <action-menu></action-menu>
 
-  <!-- 未ログイン時の認証ボタン -->
   <div id="auth-buttons" style="display:none; position:fixed; top:10px; right:10px; z-index: 2000;">
     <button id="login-btn" class="auth-btn">
       <i class="bi bi-person-circle"></i>
@@ -13,25 +11,45 @@ const bodyMarkup = `
     </button>
   </div>
 
-  <!-- ログイン後のユーザーアイコン -->
   <user-icon id="userIcon" style="display:none;"></user-icon>
 
-  <!-- ヘッダー -->
-  <header class="prompts-header">
+  <header class="prompts-header" aria-labelledby="promptShareHeroTitle">
+    <div class="prompts-header__inner">
+      <p class="hero-kicker">Prompt Marketplace</p>
+      <h1 id="promptShareHeroTitle" class="hero-title">使えるプロンプトを、すぐ見つける。</h1>
+      <p class="hero-description">
+        実務で使えるテンプレートを検索・保存・共有。チームのナレッジを、カード形式で直感的に管理できます。
+      </p>
 
-    <!-- ヘッダー背景画像上に中央配置される検索フォーム -->
-    <div class="search-section">
-      <div class="search-box">
-        <input type="text" id="searchInput" placeholder="キーワードでプロンプトを検索..." />
-        <button id="searchButton">
-          <i class="bi bi-search"></i>
+      <div class="hero-actions">
+        <button type="button" id="heroOpenPostModal" class="hero-action hero-action--primary">
+          <i class="bi bi-plus-circle"></i>
+          <span>新しいプロンプトを投稿</span>
         </button>
+        <a href="#prompt-feed-section" id="heroBrowsePrompts" class="hero-action hero-action--secondary">
+          <i class="bi bi-compass"></i>
+          <span>一覧を閲覧する</span>
+        </a>
+      </div>
+
+      <ul class="hero-highlights" aria-label="このページの特徴">
+        <li><i class="bi bi-lightning-charge-fill"></i><span>高速検索</span></li>
+        <li><i class="bi bi-collection"></i><span>カテゴリ整理</span></li>
+        <li><i class="bi bi-bookmark-check-fill"></i><span>ワンクリック保存</span></li>
+      </ul>
+
+      <div class="search-section" role="search" aria-label="プロンプト検索">
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="キーワードでプロンプトを検索..." />
+          <button id="searchButton" type="button" aria-label="検索を実行する">
+            <i class="bi bi-search"></i>
+          </button>
+        </div>
       </div>
     </div>
   </header>
 
   <main>
-    <!-- カテゴリ選択セクション -->
     <section class="categories" aria-labelledby="categories-title">
       <div class="section-header">
         <p class="section-kicker">Browse</p>
@@ -82,15 +100,16 @@ const bodyMarkup = `
       </div>
     </section>
 
-    <div id="promptResults"></div>
-
-    <!-- プロンプト一覧セクション -->
-    <section class="prompts-list" aria-labelledby="selected-category-title">
+    <section id="prompt-feed-section" class="prompts-list" aria-labelledby="selected-category-title">
       <div class="section-header prompts-list-header">
         <p class="section-kicker">Prompt Feed</p>
         <h2 id="selected-category-title">全てのプロンプト</h2>
         <p class="section-description">カードをクリックすると詳細を確認できます。</p>
       </div>
+      <div class="prompt-toolbar">
+        <p id="promptCountMeta" class="prompt-count-meta">公開プロンプトを読み込み中...</p>
+      </div>
+      <div id="promptResults"></div>
       <div class="prompt-cards">
         <p class="prompt-loading-message">読み込み中...</p>
       </div>
@@ -196,8 +215,6 @@ const bodyMarkup = `
   </button>
 
   <!-- メインのJavaScript -->
-  
-  <!-- 例: HTML の末尾に追加 -->
 `;
 
 export default function PromptSharePage() {

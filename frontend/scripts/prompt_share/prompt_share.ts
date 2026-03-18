@@ -65,6 +65,12 @@ function initPromptSharePage(attempt = 0) {
     return;
   }
   promptContainer.dataset.psInitialized = "true";
+  const promptCountMeta = document.getElementById("promptCountMeta") as HTMLElement | null;
+
+  function setPromptCountMeta(text: string) {
+    if (!promptCountMeta) return;
+    promptCountMeta.textContent = text;
+  }
 
   // ログイン状態の確認とUI切り替え
   const userIcon = document.getElementById("userIcon");
@@ -145,6 +151,17 @@ function initPromptSharePage(attempt = 0) {
     return truncateText(content, CONTENT_CHAR_LIMIT);
   }
 
+  function formatPromptDate(createdAt?: string) {
+    if (!createdAt) return "";
+    const parsedDate = new Date(createdAt);
+    if (Number.isNaN(parsedDate.getTime())) return "";
+    return new Intl.DateTimeFormat("ja-JP", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(parsedDate);
+  }
+
   function escapeHtml(value: unknown) {
     const text = value === null || value === undefined ? "" : String(value);
     return text
@@ -155,12 +172,22 @@ function initPromptSharePage(attempt = 0) {
       .replace(/'/g, "&#39;");
   }
 
+  function getBookmarkButtonMarkup(isBookmarked: boolean) {
+    const iconClass = isBookmarked ? "bi-bookmark-check-fill" : "bi-bookmark";
+    const label = isBookmarked ? "保存済み" : "保存";
+    return `<i class="bi ${iconClass}"></i><span>${label}</span>`;
+  }
+
+  function renderPromptStatusMessage(message: string, variant: "empty" | "error" = "empty") {
+    if (!promptContainer) return;
+    promptContainer.innerHTML = `<p class="prompt-feedback prompt-feedback--${variant}">${escapeHtml(message)}</p>`;
+  }
+
   function updateBookmarkButtonState(button: HTMLButtonElement | null, isBookmarked: boolean) {
     if (!button) return;
     button.classList.toggle("bookmarked", isBookmarked);
-    button.innerHTML = isBookmarked
-      ? `<i class="bi bi-bookmark-fill"></i>`
-      : `<i class="bi bi-bookmark"></i>`;
+    button.setAttribute("aria-pressed", isBookmarked ? "true" : "false");
+    button.innerHTML = getBookmarkButtonMarkup(isBookmarked);
   }
 
   function sendBookmarkRequest(method: "POST" | "DELETE", payload: Record<string, unknown>) {
@@ -224,23 +251,29 @@ function initPromptSharePage(attempt = 0) {
 
     const isBookmarked = Boolean(prompt.bookmarked);
     const isSavedToList = Boolean(prompt.saved_to_list);
-    const bookmarkIcon = isBookmarked
-      ? `<i class="bi bi-bookmark-fill"></i>`
-      : `<i class="bi bi-bookmark"></i>`;
-
     const truncatedContent = truncateContent(prompt.content);
     const safeTitle = escapeHtml(truncateTitle(prompt.title));
     const safeContent = escapeHtml(truncatedContent);
-    const safeCategory = escapeHtml(prompt.category || "");
-    const safeAuthor = escapeHtml(prompt.author || "");
+    const safeCategory = escapeHtml(prompt.category || "未分類");
+    const safeAuthor = escapeHtml(prompt.author || "匿名ユーザー");
+    const safeCreatedAt = escapeHtml(formatPromptDate(prompt.created_at) || "日付未設定");
+    const bookmarkIcon = getBookmarkButtonMarkup(isBookmarked);
 
     card.innerHTML = `
-      <button class="meatball-menu" type="button" aria-label="その他の操作" aria-haspopup="true" aria-expanded="false">
-        <i class="bi bi-three-dots"></i>
-      </button>
+      <div class="prompt-card__header">
+        <span class="prompt-card__category-pill">
+          <i class="bi bi-hash"></i>
+          <span>${safeCategory}</span>
+        </span>
+        <button class="meatball-menu" type="button" aria-label="その他の操作" aria-haspopup="true" aria-expanded="false">
+          <i class="bi bi-three-dots"></i>
+        </button>
+      </div>
 
       <div class="prompt-actions-dropdown" role="menu">
-        <button class="dropdown-item" type="button" role="menuitem" data-action="save-to-list">プロンプトリストに保存</button>
+        <button class="dropdown-item" type="button" role="menuitem" data-action="save-to-list" ${isSavedToList ? "disabled" : ""}>
+          ${isSavedToList ? "プロンプトリストに保存済み" : "プロンプトリストに保存"}
+        </button>
         <button class="dropdown-item" type="button" role="menuitem">ミュート</button>
         <button class="dropdown-item" type="button" role="menuitem">報告する</button>
       </div>
@@ -250,17 +283,25 @@ function initPromptSharePage(attempt = 0) {
 
       <div class="prompt-meta">
         <div class="prompt-meta-info">
-          <span>カテゴリ: ${safeCategory}</span>
-          <span>投稿者: ${safeAuthor}</span>
+          <span class="prompt-meta-pill">
+            <i class="bi bi-person"></i>
+            ${safeAuthor}
+          </span>
+          <span class="prompt-meta-pill">
+            <i class="bi bi-calendar3"></i>
+            ${safeCreatedAt}
+          </span>
         </div>
         <div class="prompt-actions">
           <button class="prompt-action-btn comment-btn" type="button" aria-label="コメント">
             <i class="bi bi-chat-dots"></i>
+            <span>コメント</span>
           </button>
-          <button class="prompt-action-btn like-btn" type="button" aria-label="いいね">
+          <button class="prompt-action-btn like-btn" type="button" aria-label="いいね" aria-pressed="false">
             <i class="bi bi-heart"></i>
+            <span>いいね</span>
           </button>
-          <button class="prompt-action-btn bookmark-btn ${isBookmarked ? "bookmarked" : ""}" type="button" aria-label="ブックマーク">
+          <button class="prompt-action-btn bookmark-btn ${isBookmarked ? "bookmarked" : ""}" type="button" aria-label="保存" aria-pressed="${isBookmarked ? "true" : "false"}">
             ${bookmarkIcon}
           </button>
         </div>
@@ -316,11 +357,16 @@ function initPromptSharePage(attempt = 0) {
     if (likeBtn) {
       likeBtn.addEventListener("click", function (e) {
         e.stopPropagation();
-        likeBtn.classList.toggle("liked");
+        const liked = likeBtn.classList.toggle("liked");
+        likeBtn.setAttribute("aria-pressed", liked ? "true" : "false");
         const icon = likeBtn.querySelector("i");
         if (icon) {
           icon.classList.toggle("bi-heart");
           icon.classList.toggle("bi-heart-fill");
+        }
+        const label = likeBtn.querySelector("span");
+        if (label) {
+          label.textContent = liked ? "いいね済み" : "いいね";
         }
       });
     }
@@ -368,6 +414,8 @@ function initPromptSharePage(attempt = 0) {
             .then((result) => {
               prompt.saved_to_list = true;
               card.dataset.savedToList = "true";
+              saveMenuItem.textContent = "プロンプトリストに保存済み";
+              saveMenuItem.disabled = true;
               if (result && result.message) {
                 console.log(result.message);
               }
@@ -377,7 +425,9 @@ function initPromptSharePage(attempt = 0) {
               alert("プロンプトリストへの保存中にエラーが発生しました。");
             })
             .finally(() => {
-              saveMenuItem.disabled = false;
+              if (!prompt.saved_to_list) {
+                saveMenuItem.disabled = false;
+              }
             });
         });
       }
@@ -406,12 +456,17 @@ function initPromptSharePage(attempt = 0) {
     };
   }
 
-  function renderPromptCards(prompts: PromptData[]) {
+  function renderPromptCards(
+    prompts: PromptData[],
+    options?: { emptyMessage?: string; countLabel?: string }
+  ) {
     if (!promptContainer) return;
 
+    const countLabel = options?.countLabel || "公開プロンプト";
+    setPromptCountMeta(`${countLabel}: ${prompts.length}件`);
     promptContainer.innerHTML = "";
     if (!prompts.length) {
-      promptContainer.innerHTML = "<p>プロンプトが見つかりませんでした。</p>";
+      renderPromptStatusMessage(options?.emptyMessage || "プロンプトが見つかりませんでした。");
       return;
     }
 
@@ -433,21 +488,24 @@ function initPromptSharePage(attempt = 0) {
       .then((data) => {
         const prompts = Array.isArray(data.prompts) ? data.prompts.map(normalizePromptData) : [];
         writePromptCache(prompts);
-        renderPromptCards(prompts);
+        renderPromptCards(prompts, { countLabel: "公開プロンプト" });
+        const activeCategoryCard = document.querySelector<HTMLElement>(".category-card.active");
+        if (activeCategoryCard) {
+          applyCategoryFilter(activeCategoryCard);
+        }
       })
       .catch((err) => {
         console.error("プロンプト取得エラー:", err);
-        if (promptContainer) {
-          const message = err instanceof Error ? err.message : String(err);
-          promptContainer.innerHTML = `<p>エラーが発生しました: ${escapeHtml(message)}</p>`;
-        }
+        const message = err instanceof Error ? err.message : String(err);
+        setPromptCountMeta("読み込みに失敗しました");
+        renderPromptStatusMessage(`エラーが発生しました: ${message}`, "error");
       });
   }
 
   // キャッシュがあれば先に描画してから、サーバーの最新データで更新する
   const cachedPrompts = readPromptCache();
   if (cachedPrompts && cachedPrompts.length > 0) {
-    renderPromptCards(cachedPrompts);
+    renderPromptCards(cachedPrompts, { countLabel: "公開プロンプト" });
   }
   void loadPrompts();
 
@@ -483,16 +541,19 @@ function initPromptSharePage(attempt = 0) {
         return response.json();
       })
       .then((data) => {
-        if (data.prompts && data.prompts.length > 0) {
-          renderPromptCards(data.prompts.map(normalizePromptData));
-        } else {
-          promptCardsSection.innerHTML = "<p>該当するプロンプトが見つかりませんでした。</p>";
-        }
+        const searchResults = Array.isArray(data.prompts)
+          ? data.prompts.map(normalizePromptData)
+          : [];
+        renderPromptCards(searchResults, {
+          countLabel: "検索結果",
+          emptyMessage: "該当するプロンプトが見つかりませんでした。"
+        });
       })
       .catch((err) => {
         console.error("検索エラー:", err);
         const message = err instanceof Error ? err.message : String(err);
-        promptCardsSection.innerHTML = `<p>エラーが発生しました: ${escapeHtml(message)}</p>`;
+        setPromptCountMeta("検索に失敗しました");
+        renderPromptStatusMessage(`エラーが発生しました: ${message}`, "error");
       });
   }
 
@@ -532,7 +593,7 @@ function initPromptSharePage(attempt = 0) {
     categoryCards.forEach((c) => c.classList.remove("active"));
     card.classList.add("active");
 
-    const selectedCategory = card.getAttribute("data-category");
+    const selectedCategory = card.getAttribute("data-category") || "all";
     selectedCategoryTitle!.textContent =
       selectedCategory === "all" ? "全てのプロンプト" : `${selectedCategory} のプロンプト`;
 
@@ -541,8 +602,14 @@ function initPromptSharePage(attempt = 0) {
     promptCards.forEach((prompt) => {
       const promptCategory = prompt.getAttribute("data-category");
       prompt.style.display =
-        selectedCategory === "all" || promptCategory === selectedCategory ? "block" : "none";
+        selectedCategory === "all" || promptCategory === selectedCategory ? "" : "none";
     });
+
+    const visibleCount = Array.from(promptCards).filter(
+      (prompt) => prompt.style.display !== "none"
+    ).length;
+    const countLabel = selectedCategory === "all" ? "公開プロンプト" : `${selectedCategory}`;
+    setPromptCountMeta(`${countLabel}: ${visibleCount}件`);
   }
 
   // ------------------------------
@@ -630,6 +697,7 @@ function initPromptSharePage(attempt = 0) {
   // 投稿モーダルの表示・非表示
   // ------------------------------
   const openModalBtn = document.getElementById("openPostModal");
+  const heroOpenModalBtn = document.getElementById("heroOpenPostModal");
   const postModal = document.getElementById("postModal") as HTMLElement | null;
   const closeModalBtn = document.querySelector("#postModal .close-btn") as HTMLButtonElement | null;
   const promptDetailModal = document.getElementById("promptDetailModal") as HTMLElement | null;
@@ -794,17 +862,23 @@ function initPromptSharePage(attempt = 0) {
     document.addEventListener("keydown", handleModalKeydown);
   }
 
+  const openComposerModal = () => {
+    if (!postModal) return;
+    if (!isLoggedIn) {
+      alert("プロンプトを投稿するにはログインが必要です。");
+      return;
+    }
+
+    triggerNewPromptIconRotation();
+    openModal(postModal, postModalTitleInput);
+  };
+
   if (openModalBtn && postModal) {
-    openModalBtn.addEventListener("click", function () {
-      if (!isLoggedIn) {
-        alert("プロンプトを投稿するにはログインが必要です。");
-        return;
-      }
+    openModalBtn.addEventListener("click", openComposerModal);
+  }
 
-      triggerNewPromptIconRotation();
-
-      openModal(postModal, postModalTitleInput);
-    });
+  if (heroOpenModalBtn && postModal) {
+    heroOpenModalBtn.addEventListener("click", openComposerModal);
   }
 
   if (closeModalBtn && postModal) {
