@@ -4,7 +4,7 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE TABLE users (
     id          SERIAL PRIMARY KEY,
     email       VARCHAR(255)    NOT NULL UNIQUE,
-    username    VARCHAR(255)    NOT NULL DEFAULT 'トマト',
+    username    VARCHAR(255)    NOT NULL DEFAULT 'ユーザー',
     bio         TEXT            NULL,
     avatar_url  VARCHAR(255)    NOT NULL DEFAULT '/static/user-icon.png',
     is_verified BOOLEAN         DEFAULT FALSE,

@@ -89,6 +89,19 @@ tpl.innerHTML = `
   </div>
 `;
 
+const LEGACY_DEFAULT_USERNAME = "トマト";
+const FALLBACK_USERNAME_LABEL = "ユーザー";
+
+function normalizeUsernameForTooltip(rawName: string): string {
+  if (!rawName) {
+    return "";
+  }
+  if (rawName === LEGACY_DEFAULT_USERNAME) {
+    return FALLBACK_USERNAME_LABEL;
+  }
+  return rawName;
+}
+
 class UserIcon extends HTMLElement {
   private btn: HTMLButtonElement;
   private dropdown: HTMLDivElement;
@@ -166,7 +179,8 @@ class UserIcon extends HTMLElement {
       const data = await res.json();
 
       const avatar = data.avatar_url || "/static/user-icon.png";
-      const name = typeof data.username === "string" ? data.username.trim() : "";
+      const rawName = typeof data.username === "string" ? data.username.trim() : "";
+      const name = normalizeUsernameForTooltip(rawName);
 
       this.avatarImg.src = avatar;
       // ツールチップにユーザー名（空文字時は非表示）

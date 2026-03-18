@@ -3,6 +3,8 @@ from typing import Any
 from .db import get_db_connection
 from .default_tasks import default_task_rows
 
+DEFAULT_USERNAME = "ユーザー"
+
 
 def copy_default_tasks_for_user(user_id: int) -> None:
     # 共有タスクをユーザー専用タスクとして重複なく複製する
@@ -93,11 +95,11 @@ def create_user(email: str) -> int | None:
     try:
         cursor.execute(
             """
-            INSERT INTO users (email, is_verified)
-            VALUES (%s, FALSE)
+            INSERT INTO users (email, username, is_verified)
+            VALUES (%s, %s, FALSE)
             RETURNING id
             """,
-            (email,)
+            (email, DEFAULT_USERNAME)
         )
         conn.commit()
         row = cursor.fetchone()
