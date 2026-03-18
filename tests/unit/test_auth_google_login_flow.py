@@ -40,7 +40,15 @@ def make_request():
 
 
 def make_google_login_request():
-    return build_request(method="GET", path="/google-login", session={})
+    return build_request(
+        method="GET",
+        path="/google-login",
+        session={},
+        scheme="https",
+        host_header="chatcore-ai.com",
+        server_host="chatcore-ai.com",
+        server_port=443,
+    )
 
 
 def valid_google_client_config():
@@ -96,6 +104,35 @@ class GoogleLoginFlowTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         payload = json.loads(response.body.decode("utf-8"))
         self.assertEqual(payload["error"], GOOGLE_LOGIN_UNAVAILABLE_ERROR)
+        fake_flow_class.from_client_config.assert_not_called()
+
+    def test_google_login_redirects_to_redirect_uri_host_before_starting_oauth(self):
+        request = build_request(
+            method="GET",
+            path="/google-login",
+            session={},
+            scheme="https",
+            host_header="www.chatcore-ai.com",
+            server_host="www.chatcore-ai.com",
+            server_port=443,
+        )
+        fake_flow_class = Mock()
+
+        with patch("blueprints.auth.Flow", fake_flow_class):
+            with patch(
+                "blueprints.auth._google_client_config",
+                side_effect=valid_google_client_config,
+            ):
+                with patch.dict(
+                    "os.environ",
+                    {"GOOGLE_REDIRECT_URI": "https://chatcore-ai.com/google-callback"},
+                    clear=False,
+                ):
+                    response = asyncio.run(google_login(request))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["location"], "https://chatcore-ai.com/google-login")
+        self.assertEqual(request.session, {})
         fake_flow_class.from_client_config.assert_not_called()
 
     def test_google_callback_redirects_to_login_when_dependency_is_missing(self):

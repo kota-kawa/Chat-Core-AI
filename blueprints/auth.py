@@ -148,6 +148,35 @@ def _build_google_authorization_response(request: Request, redirect_uri: str) ->
     return str(request.url)
 
 
+def _build_google_login_host_redirect(
+    request: Request, redirect_uri: str
+) -> RedirectResponse | None:
+    # Google callback のホストとログイン開始ホストがズレると host-only cookie の
+    # セッションが引き継がれないため、認可開始前に callback 側ホストへ寄せる。
+    # Canonicalize the auth-start host to the callback host so host-only session cookies survive.
+    redirect_parts = urlsplit(redirect_uri)
+    if not redirect_parts.scheme or not redirect_parts.netloc:
+        return None
+
+    request_host = request.headers.get("host") or request.url.netloc
+    if not isinstance(request_host, str) or not request_host:
+        return None
+
+    if request_host.lower() == redirect_parts.netloc.lower():
+        return None
+
+    canonical_url = urlunsplit(
+        (
+            redirect_parts.scheme,
+            redirect_parts.netloc,
+            request.url.path,
+            request.url.query,
+            "",
+        )
+    )
+    return RedirectResponse(canonical_url, status_code=302)
+
+
 def _fetch_google_user_info(access_token: str) -> dict[str, Any]:
     # Google API からログインユーザーのプロフィール情報を取得する
     # Fetch authenticated user info from Google UserInfo API.
@@ -216,9 +245,13 @@ async def google_login(request: Request):
             "Google login is unavailable because google-auth-oauthlib is not installed."
         )
         return _google_login_unavailable_response()
-    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI") or url_for(
+    configured_redirect_uri = (os.getenv("GOOGLE_REDIRECT_URI") or "").strip()
+    redirect_uri = configured_redirect_uri or url_for(
         request, "auth.google_callback", _external=True
     )
+    canonical_redirect = _build_google_login_host_redirect(request, configured_redirect_uri)
+    if canonical_redirect is not None:
+        return canonical_redirect
     client_config = _google_client_config()
     settings_error = _validate_google_oauth_settings(client_config)
     if settings_error:
