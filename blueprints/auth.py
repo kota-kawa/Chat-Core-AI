@@ -322,6 +322,8 @@ async def google_callback(request: Request):
     if not email or not google_user_id or not verified_email:
         return RedirectResponse(frontend_login_url(), status_code=302)
 
+    # ユーザー検索・作成（クリティカル：失敗時はログインを中断する）
+    # User lookup / creation — abort login on failure.
     try:
         user = await run_blocking(get_user_by_google_id, google_user_id)
         should_mark_verified = False
@@ -334,6 +336,10 @@ async def google_callback(request: Request):
             if user:
                 existing_google_user_id = (user.get("provider_user_id") or "").strip()
                 if existing_google_user_id and existing_google_user_id != google_user_id:
+                    logger.warning(
+                        "Google OAuth callback: conflicting google_user_id for email %s",
+                        email,
+                    )
                     return RedirectResponse(frontend_login_url(), status_code=302)
                 user_id = user["id"]
                 await run_blocking(link_google_account, user_id, google_user_id, email)
@@ -357,25 +363,47 @@ async def google_callback(request: Request):
                         email,
                     )
                     return RedirectResponse(frontend_login_url(), status_code=302)
+    except Exception:
+        logger.exception("Google OAuth callback: unexpected error during user lookup/creation.")
+        return RedirectResponse(frontend_login_url(), status_code=302)
 
+    # セッション確立（最優先：以降の補助処理が失敗してもログインは成立させる）
+    # Establish session first — non-critical helpers must not block login.
+    session["user_id"] = user_id
+    session["user_email"] = email
+    set_session_permanent(session, True)
+
+    # 補助処理（失敗してもログイン自体には影響させない）
+    # Auxiliary operations — failures are logged but do not block login.
+    try:
         await run_blocking(
             update_user_profile_from_google_if_unset,
             user_id,
             display_name or None,
             picture or None,
         )
-        if should_mark_verified:
-            await run_blocking(set_user_verified, user_id)
-
-        await run_blocking(copy_default_tasks_for_user, user_id)
-        persisted_user = await run_blocking(get_user_by_id, user_id)
-        session["user_id"] = user_id
-        session["user_email"] = persisted_user["email"] if persisted_user else email
-        set_session_permanent(session, True)
-        return RedirectResponse(frontend_url("/"), status_code=302)
     except Exception:
-        logger.exception("Google OAuth callback: unexpected error during user lookup/creation.")
-        return RedirectResponse(frontend_login_url(), status_code=302)
+        logger.exception("Google OAuth callback: failed to sync profile for user %s", user_id)
+
+    if should_mark_verified:
+        try:
+            await run_blocking(set_user_verified, user_id)
+        except Exception:
+            logger.exception("Google OAuth callback: failed to verify user %s", user_id)
+
+    try:
+        await run_blocking(copy_default_tasks_for_user, user_id)
+    except Exception:
+        logger.exception("Google OAuth callback: failed to copy default tasks for user %s", user_id)
+
+    try:
+        persisted_user = await run_blocking(get_user_by_id, user_id)
+        if persisted_user:
+            session["user_email"] = persisted_user["email"]
+    except Exception:
+        logger.exception("Google OAuth callback: failed to refresh email for user %s", user_id)
+
+    return RedirectResponse(frontend_url("/"), status_code=302)
 
 @auth_bp.post("/api/send_login_code", name="auth.api_send_login_code")
 async def api_send_login_code(request: Request):
