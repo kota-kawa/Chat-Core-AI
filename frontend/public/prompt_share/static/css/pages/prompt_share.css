@@ -831,9 +831,9 @@ main {
 
 .new-prompt-btn {
   position: fixed;
-  right: clamp(14px, 2vw, 28px);
+  right: auto;
   bottom: clamp(14px, 2.8vw, 28px);
-  left: auto;
+  left: clamp(14px, 2vw, 28px);
   width: 56px;
   height: 56px;
   border: none;
