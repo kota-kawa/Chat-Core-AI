@@ -8,8 +8,15 @@ CREATE TABLE users (
     bio         TEXT            NULL,
     avatar_url  VARCHAR(255)    NOT NULL DEFAULT '/static/user-icon.png',
     is_verified BOOLEAN         DEFAULT FALSE,
+    auth_provider VARCHAR(32)   NOT NULL DEFAULT 'email',
+    provider_user_id VARCHAR(255) NULL,
+    provider_email VARCHAR(255) NULL,
     created_at  TIMESTAMP       DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_provider_identity
+    ON users (auth_provider, provider_user_id)
+    WHERE provider_user_id IS NOT NULL;
 
 -- chat_roomsテーブル
 CREATE TABLE chat_rooms (

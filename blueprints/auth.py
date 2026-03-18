@@ -32,9 +32,13 @@ from services.csrf import require_csrf
 from services.users import (
     get_user_by_email,
     get_user_by_id,
+    get_user_by_google_id,
     create_user,
+    link_google_account,
     set_user_verified,
     copy_default_tasks_for_user,
+    update_user_profile_from_google_if_unset,
+    GOOGLE_AUTH_PROVIDER,
 )
 from services.email_service import send_email
 from services.llm_daily_limit import consume_auth_email_daily_quota
@@ -103,7 +107,13 @@ def _fetch_google_user_info(access_token: str) -> dict[str, Any]:
         headers={"Authorization": f"Bearer {access_token}"},
         timeout=10,
     )
+    response.raise_for_status()
     return response.json()
+
+
+def _clean_google_field(user_info: dict[str, Any], key: str) -> str:
+    value = user_info.get(key)
+    return value.strip() if isinstance(value, str) else ""
 
 
 @auth_bp.get("/register", name="auth.register_page")
@@ -203,21 +213,56 @@ async def google_callback(request: Request):
 
     credentials = flow.credentials
     user_info = await run_blocking(_fetch_google_user_info, credentials.token)
-    email = user_info.get("email")
-    if not email:
+    email = _clean_google_field(user_info, "email")
+    google_user_id = _clean_google_field(user_info, "id")
+    display_name = _clean_google_field(user_info, "name")
+    picture = _clean_google_field(user_info, "picture")
+    verified_email = bool(user_info.get("verified_email"))
+    if not email or not google_user_id or not verified_email:
         return RedirectResponse(frontend_login_url(), status_code=302)
-    user = await run_blocking(get_user_by_email, email)
-    if not user:
-        # Google 初回ログイン時はユーザーを自動作成して認証済みにする
-        # Auto-create and verify user on first Google login.
-        user_id = await run_blocking(create_user, email)
-        await run_blocking(set_user_verified, user_id)
-    else:
+
+    user = await run_blocking(get_user_by_google_id, google_user_id)
+    should_mark_verified = False
+    if user:
         user_id = user["id"]
+        await run_blocking(link_google_account, user_id, google_user_id, email)
+        should_mark_verified = not user.get("is_verified")
+    else:
+        user = await run_blocking(get_user_by_email, email)
+        if user:
+            existing_google_user_id = (user.get("provider_user_id") or "").strip()
+            if existing_google_user_id and existing_google_user_id != google_user_id:
+                return RedirectResponse(frontend_login_url(), status_code=302)
+            user_id = user["id"]
+            await run_blocking(link_google_account, user_id, google_user_id, email)
+            should_mark_verified = not user.get("is_verified")
+        else:
+            # Google 初回ログイン時は Google プロフィールを初期値に使って自動作成する
+            # Auto-create a verified user seeded from the Google profile.
+            user_id = await run_blocking(
+                create_user,
+                email,
+                username=display_name or None,
+                avatar_url=picture or None,
+                auth_provider=GOOGLE_AUTH_PROVIDER,
+                provider_user_id=google_user_id,
+                provider_email=email,
+                is_verified=True,
+            )
+
+    await run_blocking(
+        update_user_profile_from_google_if_unset,
+        user_id,
+        display_name or None,
+        picture or None,
+    )
+    if should_mark_verified:
+        await run_blocking(set_user_verified, user_id)
 
     await run_blocking(copy_default_tasks_for_user, user_id)
+    persisted_user = await run_blocking(get_user_by_id, user_id)
     session["user_id"] = user_id
-    session["user_email"] = email
+    session["user_email"] = persisted_user["email"] if persisted_user else email
     set_session_permanent(session, True)
     return RedirectResponse(frontend_url("/"), status_code=302)
 
