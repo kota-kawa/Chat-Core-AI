@@ -322,50 +322,60 @@ async def google_callback(request: Request):
     if not email or not google_user_id or not verified_email:
         return RedirectResponse(frontend_login_url(), status_code=302)
 
-    user = await run_blocking(get_user_by_google_id, google_user_id)
-    should_mark_verified = False
-    if user:
-        user_id = user["id"]
-        await run_blocking(link_google_account, user_id, google_user_id, email)
-        should_mark_verified = not user.get("is_verified")
-    else:
-        user = await run_blocking(get_user_by_email, email)
+    try:
+        user = await run_blocking(get_user_by_google_id, google_user_id)
+        should_mark_verified = False
         if user:
-            existing_google_user_id = (user.get("provider_user_id") or "").strip()
-            if existing_google_user_id and existing_google_user_id != google_user_id:
-                return RedirectResponse(frontend_login_url(), status_code=302)
             user_id = user["id"]
             await run_blocking(link_google_account, user_id, google_user_id, email)
             should_mark_verified = not user.get("is_verified")
         else:
-            # Google 初回ログイン時は Google プロフィールを初期値に使って自動作成する
-            # Auto-create a verified user seeded from the Google profile.
-            user_id = await run_blocking(
-                create_user,
-                email,
-                username=display_name or None,
-                avatar_url=picture or None,
-                auth_provider=GOOGLE_AUTH_PROVIDER,
-                provider_user_id=google_user_id,
-                provider_email=email,
-                is_verified=True,
-            )
+            user = await run_blocking(get_user_by_email, email)
+            if user:
+                existing_google_user_id = (user.get("provider_user_id") or "").strip()
+                if existing_google_user_id and existing_google_user_id != google_user_id:
+                    return RedirectResponse(frontend_login_url(), status_code=302)
+                user_id = user["id"]
+                await run_blocking(link_google_account, user_id, google_user_id, email)
+                should_mark_verified = not user.get("is_verified")
+            else:
+                # Google 初回ログイン時は Google プロフィールを初期値に使って自動作成する
+                # Auto-create a verified user seeded from the Google profile.
+                user_id = await run_blocking(
+                    create_user,
+                    email,
+                    username=display_name or None,
+                    avatar_url=picture or None,
+                    auth_provider=GOOGLE_AUTH_PROVIDER,
+                    provider_user_id=google_user_id,
+                    provider_email=email,
+                    is_verified=True,
+                )
+                if not user_id:
+                    logger.error(
+                        "Google OAuth callback: user creation returned no id for email %s",
+                        email,
+                    )
+                    return RedirectResponse(frontend_login_url(), status_code=302)
 
-    await run_blocking(
-        update_user_profile_from_google_if_unset,
-        user_id,
-        display_name or None,
-        picture or None,
-    )
-    if should_mark_verified:
-        await run_blocking(set_user_verified, user_id)
+        await run_blocking(
+            update_user_profile_from_google_if_unset,
+            user_id,
+            display_name or None,
+            picture or None,
+        )
+        if should_mark_verified:
+            await run_blocking(set_user_verified, user_id)
 
-    await run_blocking(copy_default_tasks_for_user, user_id)
-    persisted_user = await run_blocking(get_user_by_id, user_id)
-    session["user_id"] = user_id
-    session["user_email"] = persisted_user["email"] if persisted_user else email
-    set_session_permanent(session, True)
-    return RedirectResponse(frontend_url("/"), status_code=302)
+        await run_blocking(copy_default_tasks_for_user, user_id)
+        persisted_user = await run_blocking(get_user_by_id, user_id)
+        session["user_id"] = user_id
+        session["user_email"] = persisted_user["email"] if persisted_user else email
+        set_session_permanent(session, True)
+        return RedirectResponse(frontend_url("/"), status_code=302)
+    except Exception:
+        logger.exception("Google OAuth callback: unexpected error during user lookup/creation.")
+        return RedirectResponse(frontend_login_url(), status_code=302)
 
 @auth_bp.post("/api/send_login_code", name="auth.api_send_login_code")
 async def api_send_login_code(request: Request):

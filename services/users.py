@@ -15,42 +15,43 @@ def copy_default_tasks_for_user(user_id: int) -> None:
     """user_id IS NULL の共通タスクを指定ユーザーに複製"""
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    cursor.execute(
-        """
-        SELECT name, prompt_template, input_examples,
-               output_examples, display_order
-          FROM task_with_examples
-         WHERE user_id IS NULL
-        """
-    )
-    defaults = cursor.fetchall()
-    if not defaults:
-        defaults = default_task_rows()
-
-    for name, tmpl, inp, out, disp in defaults:
+    try:
         cursor.execute(
             """
-            SELECT 1 FROM task_with_examples
-             WHERE user_id = %s AND name = %s
-            """,
-            (user_id, name)
-        )
-        if cursor.fetchone():
-            continue
-        cursor.execute(
+            SELECT name, prompt_template, input_examples,
+                   output_examples, display_order
+              FROM task_with_examples
+             WHERE user_id IS NULL
             """
-            INSERT INTO task_with_examples
-                  (user_id, name, prompt_template,
-                   input_examples, output_examples, display_order)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """,
-            (user_id, name, tmpl, inp, out, disp)
         )
+        defaults = cursor.fetchall()
+        if not defaults:
+            defaults = default_task_rows()
 
-    conn.commit()
-    cursor.close()
-    conn.close()
+        for name, tmpl, inp, out, disp in defaults:
+            cursor.execute(
+                """
+                SELECT 1 FROM task_with_examples
+                 WHERE user_id = %s AND name = %s
+                """,
+                (user_id, name)
+            )
+            if cursor.fetchone():
+                continue
+            cursor.execute(
+                """
+                INSERT INTO task_with_examples
+                      (user_id, name, prompt_template,
+                       input_examples, output_examples, display_order)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (user_id, name, tmpl, inp, out, disp)
+            )
+
+        conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def get_user_by_email(email: str) -> dict[str, Any] | None:

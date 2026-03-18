@@ -330,6 +330,77 @@ class GoogleLoginFlowTestCase(unittest.TestCase):
         mock_verify.assert_called_once_with(7)
         mock_copy_tasks.assert_called_once_with(7)
 
+    def test_google_callback_redirects_to_login_when_db_error_occurs(self):
+        request = make_request()
+        fake_flow = FakeFlow()
+        fake_flow_class = Mock()
+        fake_flow_class.from_client_config.return_value = fake_flow
+
+        with patch("blueprints.auth.Flow", fake_flow_class):
+            with patch(
+                "blueprints.auth._google_client_config",
+                side_effect=valid_google_client_config,
+            ):
+                with patch("blueprints.auth.run_blocking", new=immediate_run_blocking):
+                    with patch(
+                        "blueprints.auth._fetch_google_user_info",
+                        return_value={
+                            "id": "google-user-123",
+                            "email": "user@example.com",
+                            "verified_email": True,
+                            "name": "Alice",
+                            "picture": "https://example.com/alice.png",
+                        },
+                    ):
+                        with patch(
+                            "blueprints.auth.get_user_by_google_id",
+                            side_effect=Exception("DB connection error"),
+                        ):
+                            with patch(
+                                "blueprints.auth.frontend_login_url",
+                                return_value="http://frontend/login",
+                            ):
+                                response = asyncio.run(google_callback(request))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["location"], "http://frontend/login")
+        self.assertNotIn("user_id", request.session)
+
+    def test_google_callback_redirects_to_login_when_create_user_returns_none(self):
+        request = make_request()
+        fake_flow = FakeFlow()
+        fake_flow_class = Mock()
+        fake_flow_class.from_client_config.return_value = fake_flow
+
+        with patch("blueprints.auth.Flow", fake_flow_class):
+            with patch(
+                "blueprints.auth._google_client_config",
+                side_effect=valid_google_client_config,
+            ):
+                with patch("blueprints.auth.run_blocking", new=immediate_run_blocking):
+                    with patch(
+                        "blueprints.auth._fetch_google_user_info",
+                        return_value={
+                            "id": "google-user-123",
+                            "email": "user@example.com",
+                            "verified_email": True,
+                            "name": "Alice",
+                            "picture": "https://example.com/alice.png",
+                        },
+                    ):
+                        with patch("blueprints.auth.get_user_by_google_id", return_value=None):
+                            with patch("blueprints.auth.get_user_by_email", return_value=None):
+                                with patch("blueprints.auth.create_user", return_value=None):
+                                    with patch(
+                                        "blueprints.auth.frontend_login_url",
+                                        return_value="http://frontend/login",
+                                    ):
+                                        response = asyncio.run(google_callback(request))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["location"], "http://frontend/login")
+        self.assertNotIn("user_id", request.session)
+
     def test_rejects_google_login_when_email_is_not_verified(self):
         request = make_request()
         fake_flow = FakeFlow()
