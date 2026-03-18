@@ -233,7 +233,9 @@ def _fetch_google_user_info(access_token: str) -> dict[str, Any]:
 
 def _clean_google_field(user_info: dict[str, Any], key: str) -> str:
     value = user_info.get(key)
-    return value.strip() if isinstance(value, str) else ""
+    if value is None:
+        return ""
+    return str(value).strip()
 
 
 @auth_bp.get("/register", name="auth.register_page")
@@ -332,6 +334,7 @@ async def google_callback(request: Request):
         return _redirect_to_login_after_google_failure(request, session)
     state = session.get("google_oauth_state")
     if not state:
+        logger.warning("Google OAuth callback: session state missing.")
         return _redirect_to_login_after_google_failure(request, session)
     redirect_uri = session.get("google_redirect_uri") or os.getenv(
         "GOOGLE_REDIRECT_URI"
@@ -407,12 +410,23 @@ async def google_callback(request: Request):
     except requests.RequestException:
         logger.exception("Failed to fetch Google user info.")
         return RedirectResponse(login_redirect_url, status_code=302)
+
     email = _clean_google_field(user_info, "email")
-    google_user_id = _clean_google_field(user_info, "id")
+    # id (v2) または sub (OIDC) のいずれかを Google ID として使用する
+    # Use 'id' (legacy) or 'sub' (standard OIDC) as Google provider identity.
+    google_user_id = _clean_google_field(user_info, "id") or _clean_google_field(user_info, "sub")
     display_name = _clean_google_field(user_info, "name")
     picture = _clean_google_field(user_info, "picture")
-    verified_email = bool(user_info.get("verified_email"))
+    # verified_email (v2) または email_verified (OIDC) のいずれかで認証済みか判定する
+    # Check if email is verified via 'verified_email' or 'email_verified' field.
+    verified_email = bool(user_info.get("verified_email") or user_info.get("email_verified"))
+
     if not email or not google_user_id or not verified_email:
+        missing = []
+        if not email: missing.append("email")
+        if not google_user_id: missing.append("google_user_id (id/sub)")
+        if not verified_email: missing.append("verified_email/email_verified")
+        logger.warning("Google OAuth callback: required fields missing: %s", ", ".join(missing))
         return RedirectResponse(login_redirect_url, status_code=302)
 
     # ユーザー検索・作成（クリティカル：失敗時はログインを中断する）

@@ -444,6 +444,76 @@ class GoogleLoginFlowTestCase(unittest.TestCase):
         mock_create.assert_not_called()
         self.assertNotIn("user_id", request.session)
 
+    def test_handles_oidc_compliant_userinfo_fields(self):
+        # sub や email_verified が使用されている場合でも正しく動作することを確認
+        request = make_request()
+        fake_flow = FakeFlow()
+        fake_flow_class = Mock()
+        fake_flow_class.from_client_config.return_value = fake_flow
+
+        with patch("blueprints.auth.Flow", fake_flow_class):
+            with patch(
+                "blueprints.auth._google_client_config",
+                side_effect=valid_google_client_config,
+            ):
+                with patch("blueprints.auth.run_blocking", new=immediate_run_blocking):
+                    with patch(
+                        "blueprints.auth._fetch_google_user_info",
+                        return_value={
+                            "sub": "google-oidc-456",
+                            "email": "oidc@example.com",
+                            "email_verified": True,
+                            "name": "OIDC User",
+                        },
+                    ):
+                        with patch("blueprints.auth.get_user_by_google_id", return_value=None):
+                            with patch("blueprints.auth.get_user_by_email", return_value=None):
+                                with patch("blueprints.auth.create_user", return_value=99) as mock_create:
+                                    with patch("blueprints.auth.get_user_by_id", return_value={"id": 99, "email": "oidc@example.com"}):
+                                        with patch("blueprints.auth.update_user_profile_from_google_if_unset"):
+                                            with patch("blueprints.auth.copy_default_tasks_for_user"):
+                                                response = asyncio.run(google_callback(request))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(request.session["user_id"], 99)
+        mock_create.assert_called_once()
+        args, kwargs = mock_create.call_args
+        self.assertEqual(kwargs["provider_user_id"], "google-oidc-456")
+
+    def test_handles_numeric_google_id(self):
+        # Google ID が数値として返された場合でも文字列として処理することを確認
+        request = make_request()
+        fake_flow = FakeFlow()
+        fake_flow_class = Mock()
+        fake_flow_class.from_client_config.return_value = fake_flow
+
+        with patch("blueprints.auth.Flow", fake_flow_class):
+            with patch(
+                "blueprints.auth._google_client_config",
+                side_effect=valid_google_client_config,
+            ):
+                with patch("blueprints.auth.run_blocking", new=immediate_run_blocking):
+                    with patch(
+                        "blueprints.auth._fetch_google_user_info",
+                        return_value={
+                            "id": 123456789,
+                            "email": "numeric@example.com",
+                            "verified_email": True,
+                        },
+                    ):
+                        with patch("blueprints.auth.get_user_by_google_id", return_value=None):
+                            with patch("blueprints.auth.get_user_by_email", return_value=None):
+                                with patch("blueprints.auth.create_user", return_value=100) as mock_create:
+                                    with patch("blueprints.auth.get_user_by_id", return_value={"id": 100, "email": "numeric@example.com"}):
+                                        with patch("blueprints.auth.update_user_profile_from_google_if_unset"):
+                                            with patch("blueprints.auth.copy_default_tasks_for_user"):
+                                                response = asyncio.run(google_callback(request))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(request.session["user_id"], 100)
+        args, kwargs = mock_create.call_args
+        self.assertEqual(kwargs["provider_user_id"], "123456789")
+
 
 if __name__ == "__main__":
     unittest.main()
