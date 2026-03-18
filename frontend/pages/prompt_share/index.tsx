@@ -15,28 +15,11 @@ const bodyMarkup = `
 
   <header class="prompts-header" aria-labelledby="promptShareHeroTitle">
     <div class="prompts-header__inner">
-      <p class="hero-kicker">Prompt Marketplace</p>
-      <h1 id="promptShareHeroTitle" class="hero-title">使えるプロンプトを、すぐ見つける。</h1>
+      <p class="hero-kicker">Prompt Share</p>
+      <h1 id="promptShareHeroTitle" class="hero-title">必要なプロンプトを、すぐ検索。</h1>
       <p class="hero-description">
-        実務で使えるテンプレートを検索・保存・共有。チームのナレッジを、カード形式で直感的に管理できます。
+        シンプルな検索で公開プロンプトを見つけて、そのまま保存・共有できます。
       </p>
-
-      <div class="hero-actions">
-        <button type="button" id="heroOpenPostModal" class="hero-action hero-action--primary">
-          <i class="bi bi-plus-circle"></i>
-          <span>新しいプロンプトを投稿</span>
-        </button>
-        <a href="#prompt-feed-section" id="heroBrowsePrompts" class="hero-action hero-action--secondary">
-          <i class="bi bi-compass"></i>
-          <span>一覧を閲覧する</span>
-        </a>
-      </div>
-
-      <ul class="hero-highlights" aria-label="このページの特徴">
-        <li><i class="bi bi-lightning-charge-fill"></i><span>高速検索</span></li>
-        <li><i class="bi bi-collection"></i><span>カテゴリ整理</span></li>
-        <li><i class="bi bi-bookmark-check-fill"></i><span>ワンクリック保存</span></li>
-      </ul>
 
       <div class="search-section" role="search" aria-label="プロンプト検索">
         <div class="search-box">
@@ -46,15 +29,20 @@ const bodyMarkup = `
           </button>
         </div>
       </div>
+
+      <div class="hero-actions">
+        <button type="button" id="heroOpenPostModal" class="hero-action hero-action--primary">
+          <i class="bi bi-plus-lg"></i>
+          <span>プロンプトを投稿</span>
+        </button>
+      </div>
     </div>
   </header>
 
   <main>
     <section class="categories" aria-labelledby="categories-title">
-      <div class="section-header">
-        <p class="section-kicker">Browse</p>
-        <h2 id="categories-title">カテゴリ一覧</h2>
-        <p class="section-description">気になるテーマを選ぶと、プロンプトを絞り込めます。</p>
+      <div class="section-header section-header--compact">
+        <h2 id="categories-title">カテゴリ</h2>
       </div>
       <div class="category-list">
         <button type="button" class="category-card active" data-category="all">
@@ -101,10 +89,8 @@ const bodyMarkup = `
     </section>
 
     <section id="prompt-feed-section" class="prompts-list" aria-labelledby="selected-category-title">
-      <div class="section-header prompts-list-header">
-        <p class="section-kicker">Prompt Feed</p>
+      <div class="section-header prompts-list-header section-header--compact">
         <h2 id="selected-category-title">全てのプロンプト</h2>
-        <p class="section-description">カードをクリックすると詳細を確認できます。</p>
       </div>
       <div class="prompt-toolbar">
         <p id="promptCountMeta" class="prompt-count-meta">公開プロンプトを読み込み中...</p>
