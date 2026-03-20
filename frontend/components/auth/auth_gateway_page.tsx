@@ -1,9 +1,8 @@
-import "../../scripts/core/csrf";
-
 import Head from "next/head";
 import { Outfit } from "next/font/google";
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 
+import { ensureCsrfProtection } from "../../scripts/core/csrf";
 import { authenticateWithPasskey, browserSupportsPasskeys, registerPasskey } from "../../scripts/core/passkeys";
 
 type AuthStep = "entry" | "code" | "passkey";
@@ -71,6 +70,7 @@ export default function AuthGatewayPage() {
   };
 
   useEffect(() => {
+    ensureCsrfProtection();
     document.body.classList.add("auth-page");
     setSupportsPasskeys(browserSupportsPasskeys());
     return () => {
