@@ -165,7 +165,26 @@ const bodyMarkup = `
       <div id="security-section" class="settings-section">
         <div class="settings-card">
           <h2>セキュリティ</h2>
-          <p>セキュリティ設定機能は準備中です。</p>
+          <div class="security-stack">
+            <div class="security-panel">
+              <h3>Passkeys</h3>
+              <p id="passkeySupportStatus">このブラウザの対応状況を確認しています。</p>
+              <div class="button-group">
+                <button type="button" class="primary-button" id="registerPasskeyBtn">
+                  この端末にPasskeyを追加
+                </button>
+                <button type="button" class="secondary-button" id="refreshPasskeysBtn">
+                  一覧を更新
+                </button>
+              </div>
+            </div>
+            <div class="security-panel">
+              <h3>登録済みPasskeys</h3>
+              <div id="passkeyList" class="passkey-list">
+                <p class="passkey-empty">まだPasskeyは登録されていません。</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </main>
@@ -277,6 +296,38 @@ export default function UserSettingsPage() {
           }
           .settings-section.active {
             display: block;
+          }
+          .security-stack {
+            display: grid;
+            gap: 1rem;
+          }
+          .security-panel {
+            padding: 1rem 1.1rem;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 16px;
+            background: #fff;
+          }
+          .passkey-list {
+            display: grid;
+            gap: 0.75rem;
+          }
+          .passkey-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.9rem 1rem;
+            border-radius: 14px;
+            background: #f7faf8;
+          }
+          .passkey-meta {
+            color: #5f6b66;
+            font-size: 0.92rem;
+            line-height: 1.5;
+          }
+          .passkey-empty {
+            margin: 0;
+            color: #5f6b66;
           }
           @media (max-width: 768px) {
             .user-settings-layout {

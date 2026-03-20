@@ -1,49 +1,15 @@
+import "../../scripts/core/csrf";
+
 import Head from "next/head";
 import { Outfit } from "next/font/google";
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 
-type AuthMode = "login" | "register";
-type AuthStep = "email" | "code";
+import { authenticateWithPasskey, browserSupportsPasskeys, registerPasskey } from "../../lib/passkeys";
 
-type ModeConfig = {
-  title: string;
-  defaultIcon: string;
-  sentIcon: string;
-  sendLabel: string;
-  verifyLabel: string;
-  googleLabel: string;
-  sendEndpoint: string;
-  verifyEndpoint: string;
-  sentMessage: string;
-};
+type AuthStep = "entry" | "code" | "passkey";
 
-const MODE_CONFIG: Record<AuthMode, ModeConfig> = {
-  login: {
-    title: "ログイン",
-    defaultIcon: "🌱",
-    sentIcon: "🌳",
-    sendLabel: "認証コード送信",
-    verifyLabel: "ログイン",
-    googleLabel: "Googleでログイン",
-    sendEndpoint: "/api/send_login_code",
-    verifyEndpoint: "/api/verify_login_code",
-    sentMessage: "認証コードが送信されました。"
-  },
-  register: {
-    title: "登録",
-    defaultIcon: "🐟",
-    sentIcon: "🐳",
-    sendLabel: "確認メール送信",
-    verifyLabel: "認証する",
-    googleLabel: "Googleで登録",
-    sendEndpoint: "/api/send_verification_email",
-    verifyEndpoint: "/api/verify_registration_code",
-    sentMessage: "確認メールを送信しました。\n\n認証コードを入力してください。"
-  }
-};
-
-const REDIRECT_DELAY_MS = 2000;
-const MODAL_AUTO_CLOSE_MS = 2000;
+const REDIRECT_DELAY_MS = 1200;
+const MODAL_AUTO_CLOSE_MS = 2200;
 const MODAL_CLOSE_ANIMATION_MS = 500;
 
 const authHeadingFont = Outfit({
@@ -52,21 +18,17 @@ const authHeadingFont = Outfit({
   display: "swap"
 });
 
-type AuthGatewayPageProps = {
-  initialMode: AuthMode;
-};
-
-export default function AuthGatewayPage({ initialMode }: AuthGatewayPageProps) {
-  const [mode, setMode] = useState<AuthMode>(initialMode);
-  const [step, setStep] = useState<AuthStep>("email");
+export default function AuthGatewayPage() {
+  const [step, setStep] = useState<AuthStep>("entry");
   const [email, setEmail] = useState("");
   const [authCode, setAuthCode] = useState("");
-  const [icon, setIcon] = useState(MODE_CONFIG[initialMode].defaultIcon);
   const [errorMessage, setErrorMessage] = useState("");
   const [sendingCode, setSendingCode] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(false);
+  const [passkeyPending, setPasskeyPending] = useState(false);
   const [modalMessage, setModalMessage] = useState<string | null>(null);
   const [isModalClosing, setIsModalClosing] = useState(false);
+  const [supportsPasskeys, setSupportsPasskeys] = useState(false);
 
   const modalAutoCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const modalCloseAnimationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -77,17 +39,6 @@ export default function AuthGatewayPage({ initialMode }: AuthGatewayPageProps) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-  };
-
-  const resetFormForMode = (nextMode: AuthMode) => {
-    setMode(nextMode);
-    setStep("email");
-    setEmail("");
-    setAuthCode("");
-    setErrorMessage("");
-    setSendingCode(false);
-    setVerifyingCode(false);
-    setIcon(MODE_CONFIG[nextMode].defaultIcon);
   };
 
   const hideModal = () => {
@@ -104,7 +55,6 @@ export default function AuthGatewayPage({ initialMode }: AuthGatewayPageProps) {
   const showModalMessage = (message: string) => {
     setModalMessage(message);
     setIsModalClosing(false);
-
     clearTimer(modalAutoCloseTimerRef);
     clearTimer(modalCloseAnimationTimerRef);
 
@@ -113,10 +63,21 @@ export default function AuthGatewayPage({ initialMode }: AuthGatewayPageProps) {
     }, MODAL_AUTO_CLOSE_MS);
   };
 
+  const scheduleRedirectHome = () => {
+    clearTimer(redirectTimerRef);
+    redirectTimerRef.current = setTimeout(() => {
+      window.location.href = "/";
+    }, REDIRECT_DELAY_MS);
+  };
+
   useEffect(() => {
     document.body.classList.add("auth-page");
+    setSupportsPasskeys(browserSupportsPasskeys());
     return () => {
       document.body.classList.remove("auth-page");
+      clearTimer(modalAutoCloseTimerRef);
+      clearTimer(modalCloseAnimationTimerRef);
+      clearTimer(redirectTimerRef);
     };
   }, []);
 
@@ -137,6 +98,7 @@ export default function AuthGatewayPage({ initialMode }: AuthGatewayPageProps) {
         console.error("Error checking login state:", error);
       }
     };
+
     const checkTimerId = window.setTimeout(() => {
       void checkLoginState();
     }, 0);
@@ -144,17 +106,8 @@ export default function AuthGatewayPage({ initialMode }: AuthGatewayPageProps) {
     return () => {
       cancelled = true;
       clearTimeout(checkTimerId);
-      clearTimer(modalAutoCloseTimerRef);
-      clearTimer(modalCloseAnimationTimerRef);
-      clearTimer(redirectTimerRef);
     };
   }, []);
-
-  useEffect(() => {
-    resetFormForMode(initialMode);
-  }, [initialMode]);
-
-  const config = MODE_CONFIG[mode];
 
   const handleSendCode = async () => {
     const trimmedEmail = email.trim();
@@ -166,25 +119,22 @@ export default function AuthGatewayPage({ initialMode }: AuthGatewayPageProps) {
     }
 
     setSendingCode(true);
-
     try {
-      const response = await fetch(config.sendEndpoint, {
+      const response = await fetch("/api/auth/send_email_code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: trimmedEmail })
       });
-
       const data = await response.json().catch(() => ({}));
 
       if (data.status === "success") {
         setStep("code");
-        setIcon(config.sentIcon);
-        showModalMessage(config.sentMessage);
+        showModalMessage("認証コードを送信しました。メールを確認してください。");
       } else {
         setErrorMessage(typeof data.error === "string" ? data.error : "認証コード送信に失敗しました。");
       }
     } catch (error) {
-      console.error("Error:", error);
+      console.error("Error sending email auth code:", error);
       setErrorMessage("サーバーエラーが発生しました。");
     } finally {
       setSendingCode(false);
@@ -201,34 +151,56 @@ export default function AuthGatewayPage({ initialMode }: AuthGatewayPageProps) {
     }
 
     setVerifyingCode(true);
-
     try {
-      const response = await fetch(config.verifyEndpoint, {
+      const response = await fetch("/api/auth/verify_email_code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ authCode: trimmedCode })
       });
-
       const data = await response.json().catch(() => ({}));
 
       if (data.status === "success") {
-        if (mode === "register") {
-          showModalMessage("認証が完了しました！\n数秒後にトップページへ移動します。");
-          clearTimer(redirectTimerRef);
-          redirectTimerRef.current = setTimeout(() => {
-            window.location.href = "/";
-          }, REDIRECT_DELAY_MS);
+        if (supportsPasskeys) {
+          setStep("passkey");
+          showModalMessage("認証が完了しました。次回から1タップで入れるようにできます。");
         } else {
-          window.location.href = "/";
+          scheduleRedirectHome();
         }
       } else {
         setErrorMessage(typeof data.error === "string" ? data.error : "認証に失敗しました。");
       }
     } catch (error) {
-      console.error("Error:", error);
+      console.error("Error verifying email auth code:", error);
       setErrorMessage("サーバーエラーが発生しました。");
     } finally {
       setVerifyingCode(false);
+    }
+  };
+
+  const handlePasskeyLogin = async () => {
+    setErrorMessage("");
+    setPasskeyPending(true);
+    try {
+      await authenticateWithPasskey();
+      window.location.href = "/";
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Passkey認証に失敗しました。");
+    } finally {
+      setPasskeyPending(false);
+    }
+  };
+
+  const handlePasskeyRegistration = async () => {
+    setErrorMessage("");
+    setPasskeyPending(true);
+    try {
+      await registerPasskey();
+      showModalMessage("Passkeyを保存しました。");
+      scheduleRedirectHome();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Passkey登録に失敗しました。");
+    } finally {
+      setPasskeyPending(false);
     }
   };
 
@@ -237,7 +209,7 @@ export default function AuthGatewayPage({ initialMode }: AuthGatewayPageProps) {
       <Head>
         <meta charSet="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>AIチャット 認証</title>
+        <title>Chat Core 認証</title>
         <link rel="icon" type="image/webp" href="/static/favicon.webp" />
         <link rel="icon" type="image/png" href="/static/favicon.png" />
         <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png" />
@@ -247,119 +219,159 @@ export default function AuthGatewayPage({ initialMode }: AuthGatewayPageProps) {
         <div className="chat-background" />
 
         <div className="auth-container">
-          {sendingCode ? (
-            <div className="spinner-overlay" role="status" aria-live="polite" aria-label="送信中">
+          {(sendingCode || verifyingCode || passkeyPending) ? (
+            <div className="spinner-overlay" role="status" aria-live="polite" aria-label="処理中">
               <div className="spinner-ring" />
             </div>
           ) : null}
 
-          <div className="bot-icon" id="iconDisplay">{icon}</div>
-          <h1 className="title" id="authTitle">{config.title}</h1>
+          <div className="bot-icon">{step === "passkey" ? "🔐" : supportsPasskeys ? "🌿" : "✉️"}</div>
+          <h1 className="title">アカウントに続ける</h1>
+          <p className="subtitle">
+            Passkey、Google、メール認証に対応しています。
+            <br />
+            初めての場合はメール認証後にアカウントを作成します。
+          </p>
 
-          <div className="auth-toggle">
-            <button
-              type="button"
-              className={`toggle-btn ${mode === "login" ? "active" : ""}`}
-              onClick={() => resetFormForMode("login")}
-            >
-              ログイン
-            </button>
-            <button
-              type="button"
-              className={`toggle-btn ${mode === "register" ? "active" : ""}`}
-              onClick={() => resetFormForMode("register")}
-            >
-              登録
-            </button>
-          </div>
+          <div className="error-message" role="alert">{errorMessage}</div>
 
-          <div id="error-message" className="error-message" role="alert">{errorMessage}</div>
+          {step === "entry" ? (
+            <>
+              {supportsPasskeys ? (
+                <button
+                  type="button"
+                  className="passkey-btn"
+                  onClick={() => void handlePasskeyLogin()}
+                  disabled={passkeyPending}
+                >
+                  Passkeyで続ける
+                </button>
+              ) : null}
 
-          <div id="email-section" className={step === "email" ? "" : "hidden"}>
-            <label htmlFor="email" className="email-label">メールアドレス:</label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              required
-              className="email-input"
-              placeholder="example@mail.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              autoComplete="email"
-            />
-            <button
-              id="sendCodeBtn"
-              type="button"
-              className="submit-btn"
-              onClick={handleSendCode}
-              disabled={sendingCode}
-            >
-              {config.sendLabel}
-            </button>
-          </div>
+              <div className="google-container">
+                <button
+                  type="button"
+                  className="google-btn"
+                  id="googleAuthBtn"
+                  onClick={() => {
+                    window.location.href = "/google-login";
+                  }}
+                >
+                  <svg
+                    className="google-icon"
+                    viewBox="0 0 24 24"
+                    width="18"
+                    height="18"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path
+                      fill="#EA4335"
+                      d="M12 10.2v3.9h5.5c-.2 1.2-.9 2.2-1.9 3v2.5h3.1c1.8-1.6 2.8-4.1 2.8-7 0-.7-.1-1.5-.2-2.2H12z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 22c2.7 0 5-0.9 6.6-2.4l-3.1-2.5c-.9.6-2 .9-3.4.9-2.6 0-4.8-1.7-5.6-4.1H3.3v2.6C4.9 19.8 8.2 22 12 22z"
+                    />
+                    <path
+                      fill="#4A90E2"
+                      d="M6.4 13.9c-.2-.6-.3-1.2-.3-1.9s.1-1.3.3-1.9V7.5H3.3C2.5 9 2 10.5 2 12s.5 3 1.3 4.5l3.1-2.6z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M12 6.1c1.5 0 2.8.5 3.9 1.5l2.9-2.9C17 2.9 14.7 2 12 2 8.2 2 4.9 4.2 3.3 7.5l3.1 2.6c.8-2.4 3-4 5.6-4z"
+                    />
+                  </svg>
+                  <span>Googleで続ける</span>
+                </button>
+              </div>
 
-          <div id="code-section" className={step === "code" ? "" : "hidden"}>
-            <label htmlFor="authCode" className="email-label">認証コード:</label>
-            <input
-              type="text"
-              id="authCode"
-              name="authCode"
-              required
-              className="email-input"
-              placeholder="認証コードを入力"
-              value={authCode}
-              onChange={(event) => setAuthCode(event.target.value)}
-              autoComplete="one-time-code"
-            />
-            <button
-              id="verifyCodeBtn"
-              type="button"
-              className="submit-btn"
-              onClick={handleVerifyCode}
-              disabled={verifyingCode}
-            >
-              {config.verifyLabel}
-            </button>
-          </div>
+              <div className="divider"><span>またはメール</span></div>
 
-          <div className="google-container">
-            <button
-              type="button"
-              className="google-btn"
-              id="googleAuthBtn"
-              onClick={() => {
-                window.location.href = "/google-login";
-              }}
-            >
-              <svg
-                className="google-icon"
-                viewBox="0 0 24 24"
-                width="18"
-                height="18"
-                aria-hidden="true"
-                focusable="false"
+              <label htmlFor="email" className="email-label">メールアドレス</label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                required
+                className="email-input"
+                placeholder="example@mail.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                autoComplete="email webauthn"
+              />
+              <button
+                type="button"
+                className="submit-btn"
+                onClick={() => void handleSendCode()}
+                disabled={sendingCode}
               >
-                <path
-                  fill="#EA4335"
-                  d="M12 10.2v3.9h5.5c-.2 1.2-.9 2.2-1.9 3v2.5h3.1c1.8-1.6 2.8-4.1 2.8-7 0-.7-.1-1.5-.2-2.2H12z"
+                メールで続ける
+              </button>
+            </>
+          ) : null}
+
+          {step === "code" ? (
+            <>
+              <div className="code-panel">
+                <p className="step-caption">メールに届いた認証コードを入力してください。</p>
+                <label htmlFor="authCode" className="email-label">認証コード</label>
+                <input
+                  type="text"
+                  id="authCode"
+                  name="authCode"
+                  required
+                  className="email-input"
+                  placeholder="認証コードを入力"
+                  value={authCode}
+                  onChange={(event) => setAuthCode(event.target.value)}
+                  autoComplete="one-time-code"
                 />
-                <path
-                  fill="#34A853"
-                  d="M12 22c2.7 0 5-0.9 6.6-2.4l-3.1-2.5c-.9.6-2 .9-3.4.9-2.6 0-4.8-1.7-5.6-4.1H3.3v2.6C4.9 19.8 8.2 22 12 22z"
-                />
-                <path
-                  fill="#4A90E2"
-                  d="M6.4 13.9c-.2-.6-.3-1.2-.3-1.9s.1-1.3.3-1.9V7.5H3.3C2.5 9 2 10.5 2 12s.5 3 1.3 4.5l3.1-2.6z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M12 6.1c1.5 0 2.8.5 3.9 1.5l2.9-2.9C17 2.9 14.7 2 12 2 8.2 2 4.9 4.2 3.3 7.5l3.1 2.6c.8-2.4 3-4 5.6-4z"
-                />
-              </svg>
-              <span id="googleBtnText">{config.googleLabel}</span>
-            </button>
-          </div>
+                <button
+                  type="button"
+                  className="submit-btn"
+                  onClick={() => void handleVerifyCode()}
+                  disabled={verifyingCode}
+                >
+                  認証して続ける
+                </button>
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  onClick={() => {
+                    setAuthCode("");
+                    setErrorMessage("");
+                    setStep("entry");
+                  }}
+                >
+                  戻る
+                </button>
+              </div>
+            </>
+          ) : null}
+
+          {step === "passkey" ? (
+            <div className="passkey-panel">
+              <p className="step-caption">
+                この端末にPasskeyを保存すると、次回からメールコードなしで入れます。
+              </p>
+              <button
+                type="button"
+                className="passkey-btn"
+                onClick={() => void handlePasskeyRegistration()}
+                disabled={passkeyPending}
+              >
+                この端末にPasskeyを保存
+              </button>
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={scheduleRedirectHome}
+              >
+                後で設定する
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <div
@@ -426,7 +438,7 @@ export default function AuthGatewayPage({ initialMode }: AuthGatewayPageProps) {
           border-radius: 24px;
           text-align: center;
           box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-          width: min(92vw, 440px);
+          width: min(92vw, 460px);
           margin: 0 auto;
           animation: cardIn 0.8s ease;
         }
@@ -448,46 +460,41 @@ export default function AuthGatewayPage({ initialMode }: AuthGatewayPageProps) {
           }
         }
 
+        .bot-icon {
+          font-size: 3rem;
+          line-height: 1;
+        }
+
         .title {
           font-size: 2.1rem;
           color: var(--accent);
-          margin: 10px 0 18px;
+          margin: 12px 0 10px;
           letter-spacing: 0.06em;
           text-shadow: 0 8px 24px rgba(0, 255, 136, 0.25);
         }
 
-        .auth-toggle {
-          display: flex;
-          margin-bottom: 22px;
-          border-radius: 999px;
-          background: rgba(0, 0, 0, 0.35);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          padding: 4px;
-          gap: 4px;
-        }
-
-        .toggle-btn {
-          flex: 1;
-          padding: 10px 16px;
-          background: transparent;
-          border: none;
+        .subtitle {
+          margin: 0 0 20px;
           color: var(--muted);
-          font-size: 0.98rem;
-          font-weight: 600;
-          cursor: pointer;
-          border-radius: 999px;
-          transition: all 0.25s ease;
+          font-size: 0.95rem;
+          line-height: 1.6;
         }
 
-        .toggle-btn.active {
-          background: var(--accent);
-          color: #072b1a;
-          box-shadow: 0 8px 20px rgba(0, 255, 136, 0.35);
+        .divider {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin: 18px 0 14px;
+          color: var(--muted);
+          font-size: 0.9rem;
         }
 
-        .toggle-btn:hover:not(.active) {
-          color: #ffffff;
-          background: rgba(255, 255, 255, 0.08);
+        .divider::before,
+        .divider::after {
+          content: "";
+          flex: 1;
+          height: 1px;
+          background: rgba(255, 255, 255, 0.12);
         }
 
         .email-label {
@@ -518,274 +525,198 @@ export default function AuthGatewayPage({ initialMode }: AuthGatewayPageProps) {
         .email-input:focus {
           background: rgba(10, 20, 15, 0.7);
           border-color: var(--accent);
-          box-shadow: 0 0 0 3px rgba(0, 255, 136, 0.2);
+          box-shadow: 0 0 0 4px rgba(0, 255, 136, 0.12);
+        }
+
+        .submit-btn,
+        .passkey-btn,
+        .ghost-btn,
+        .google-btn {
+          width: 100%;
+          border: none;
+          border-radius: 16px;
+          cursor: pointer;
+          transition: transform 0.2s ease, box-shadow 0.25s ease, background 0.25s ease;
+        }
+
+        .submit-btn,
+        .passkey-btn {
+          padding: 13px 18px;
+          font-size: 1rem;
+          font-weight: 700;
+          margin-top: 4px;
+        }
+
+        .passkey-btn {
+          background: linear-gradient(135deg, #00ff88, #8cffc1);
+          color: #072b1a;
+          box-shadow: 0 12px 28px rgba(0, 255, 136, 0.25);
         }
 
         .submit-btn {
-          background: linear-gradient(135deg, #00ff88, #00d77a);
-          color: #072b1a;
-          border: none;
-          padding: 12px 20px;
-          font-size: 1rem;
-          font-weight: 700;
-          border-radius: 16px;
-          cursor: pointer;
-          transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
-          width: 100%;
-          margin: 6px auto 0;
-          display: block;
-          text-align: center;
+          background: #eafff3;
+          color: #0a2a18;
         }
 
-        .submit-btn:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 12px 24px rgba(0, 255, 136, 0.35);
-        }
-
-        .submit-btn:disabled {
-          background: #666;
-          color: #e0e0e0;
-          cursor: not-allowed;
-          box-shadow: none;
-        }
-
-        .google-btn {
-          background-color: #4285f4;
-          color: #ffffff;
-          border: none;
-          padding: 12px 18px;
-          font-size: 1rem;
+        .ghost-btn {
+          margin-top: 12px;
+          padding: 12px 16px;
+          background: rgba(255, 255, 255, 0.06);
+          color: var(--text);
           font-weight: 600;
-          border-radius: 16px;
-          cursor: pointer;
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
-          width: 100%;
-          margin: 18px auto 0;
         }
 
-        .google-icon {
-          flex: 0 0 auto;
-          display: block;
-        }
-
-        .google-btn:hover {
+        .submit-btn:hover:not(:disabled),
+        .passkey-btn:hover:not(:disabled),
+        .ghost-btn:hover:not(:disabled),
+        .google-btn:hover:not(:disabled) {
           transform: translateY(-1px);
-          box-shadow: 0 16px 28px rgba(0, 0, 0, 0.25);
+        }
+
+        .submit-btn:disabled,
+        .passkey-btn:disabled,
+        .ghost-btn:disabled,
+        .google-btn:disabled {
+          cursor: wait;
+          opacity: 0.65;
         }
 
         .google-container {
           margin-top: 8px;
         }
 
-        @media (max-width: 600px) {
-          .submit-btn,
-          .google-btn {
-            font-size: 0.95rem;
+        .google-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          padding: 12px 16px;
+          background: #ffffff;
+          color: #163022;
+          font-weight: 700;
+        }
+
+        .google-icon {
+          flex: 0 0 auto;
+        }
+
+        .step-caption {
+          margin: 0 0 6px;
+          color: var(--muted);
+          line-height: 1.6;
+        }
+
+        .code-panel,
+        .passkey-panel {
+          animation: sectionIn 0.2s ease;
+        }
+
+        @keyframes sectionIn {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
           }
-        }
-
-        .bot-icon {
-          font-size: 3.6rem;
-          color: var(--accent);
-          margin-bottom: 12px;
-          animation: botBlink 3s ease-in-out infinite;
-        }
-
-        @keyframes botBlink {
-          0%,
-          100% {
+          to {
             opacity: 1;
-          }
-          50% {
-            opacity: 0.5;
+            transform: translateY(0);
           }
         }
 
-        .chat-background {
-          position: fixed;
-          inset: 0;
-          width: 100vw;
-          height: 100vh;
-          height: 100dvh;
-          background-image: url("/static/img.jpg");
-          background-repeat: no-repeat;
-          background-position: center center;
-          background-size: cover;
-          opacity: 0.22;
-          z-index: 0;
-          pointer-events: none;
+        .error-message {
+          min-height: 24px;
+          margin-bottom: 6px;
+          color: #ffb3b3;
+          font-size: 0.92rem;
         }
 
-        .chat-background::after {
-          content: "";
+        .spinner-overlay {
           position: absolute;
           inset: 0;
-          background: linear-gradient(135deg, rgba(14, 64, 30, 0.75), rgba(22, 79, 47, 0.6));
+          display: grid;
+          place-items: center;
+          background: rgba(7, 20, 14, 0.45);
+          border-radius: 24px;
+          z-index: 3;
         }
 
-        #code-section .email-input {
-          border-color: rgba(204, 255, 153, 0.6);
-          color: #ccff99;
+        .spinner-ring {
+          width: 48px;
+          height: 48px;
+          border-radius: 999px;
+          border: 4px solid rgba(255, 255, 255, 0.18);
+          border-top-color: var(--accent);
+          animation: spin 0.85s linear infinite;
         }
 
-        #code-section .email-input:focus {
-          border-color: #ccff99;
-          box-shadow: 0 0 0 3px rgba(204, 255, 153, 0.25);
-        }
-
-        #code-section .submit-btn {
-          background: linear-gradient(135deg, #ccff99, #b3e68d);
-          color: #14361f;
-        }
-
-        #code-section .submit-btn:hover {
-          box-shadow: 0 12px 24px rgba(204, 255, 153, 0.35);
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
         }
 
         .modal {
-          display: none;
           position: fixed;
-          z-index: 1000;
-          left: 0;
-          top: 0;
-          width: 100%;
-          height: 100%;
-          overflow: auto;
-          background-color: rgba(0, 0, 0, 0.5);
+          inset: 0;
+          z-index: 40;
+          display: none;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+          background: rgba(0, 0, 0, 0.5);
         }
 
         .modal.is-open {
-          display: block;
+          display: flex;
         }
 
         .modal-content {
           position: relative;
-          background-color: #0e401e;
-          margin: 15% auto;
-          padding: 22px;
-          border: 1px solid rgba(255, 255, 255, 0.15);
-          width: min(88vw, 420px);
-          border-radius: 16px;
-          text-align: center;
-          color: #fff;
-          box-shadow: 0 18px 32px rgba(0, 0, 0, 0.3);
-          animation: modalFadeIn 0.4s ease;
-        }
-
-        #modalMessage {
-          white-space: pre-line;
-          margin: 0;
-        }
-
-        @keyframes modalFadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(12px) scale(0.98);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-
-        @keyframes slideUp {
-          from {
-            transform: translateY(0);
-            opacity: 1;
-          }
-          to {
-            transform: translateY(-100%);
-            opacity: 0;
-          }
+          width: min(92vw, 360px);
+          padding: 24px 22px 22px;
+          border-radius: 22px;
+          background: rgba(8, 20, 14, 0.95);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+          animation: modalIn 0.18s ease;
         }
 
         .modal.hide-animation .modal-content {
-          animation: slideUp 0.5s forwards;
+          animation: modalOut 0.18s ease forwards;
+        }
+
+        @keyframes modalIn {
+          from {
+            opacity: 0;
+            transform: scale(0.96);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        @keyframes modalOut {
+          to {
+            opacity: 0;
+            transform: scale(0.96);
+          }
         }
 
         .close {
           position: absolute;
           top: 10px;
           right: 12px;
-          color: rgba(255, 255, 255, 0.7);
-          font-size: 24px;
-          font-weight: bold;
-          cursor: pointer;
           border: none;
           background: transparent;
-          line-height: 1;
-          padding: 0;
+          color: #ffffff;
+          font-size: 1.5rem;
+          cursor: pointer;
         }
 
-        .close:hover,
-        .close:focus {
-          color: #fff;
-          text-decoration: none;
-        }
-
-        .hidden {
-          display: none !important;
-        }
-
-        .error-message {
-          color: #ff6b6b;
-          margin-bottom: 12px;
-          font-size: 0.9rem;
-          min-height: 1.2em;
-        }
-
-        button:focus-visible,
-        input:focus-visible {
-          outline: 3px solid rgba(0, 255, 136, 0.35);
-          outline-offset: 2px;
-        }
-
-        .spinner-overlay {
-          position: absolute;
-          inset: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: rgba(14, 64, 30, 0.45);
-          border-radius: 24px;
-          z-index: 20;
-          pointer-events: none;
-        }
-
-        .spinner-ring {
-          width: 72px;
-          height: 72px;
-          border: 8px solid transparent;
-          border-top-color: #ff00ff;
-          border-right-color: #00ffff;
-          border-bottom-color: #ffff00;
-          border-left-color: #ff0000;
-          border-radius: 50%;
-          animation: spin 1s linear infinite, hueShift 3s linear infinite;
-          box-shadow: 0 0 20px rgba(255, 255, 255, 0.7);
-        }
-
-        @keyframes spin {
-          0% {
-            transform: rotate(0deg);
-          }
-          100% {
-            transform: rotate(360deg);
-          }
-        }
-
-        @keyframes hueShift {
-          0% {
-            filter: hue-rotate(0deg);
-          }
-          100% {
-            filter: hue-rotate(360deg);
-          }
+        #modalMessage {
+          margin: 0;
+          white-space: pre-wrap;
+          line-height: 1.6;
         }
       `}</style>
     </>

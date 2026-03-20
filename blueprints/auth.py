@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import time
@@ -26,6 +27,39 @@ except ModuleNotFoundError:  # pragma: no cover - optional for test envs
     class OAuth2Error(Exception):
         pass
 
+try:
+    from webauthn import (
+        generate_authentication_options,
+        generate_registration_options,
+        verify_authentication_response,
+        verify_registration_response,
+    )
+    from webauthn.helpers import (
+        base64url_to_bytes,
+        bytes_to_base64url,
+        options_to_json,
+    )
+    from webauthn.helpers.structs import (
+        AuthenticatorSelectionCriteria,
+        PublicKeyCredentialDescriptor,
+        PublicKeyCredentialHint,
+        ResidentKeyRequirement,
+        UserVerificationRequirement,
+    )
+except ModuleNotFoundError:  # pragma: no cover - optional for test envs
+    generate_authentication_options = None
+    generate_registration_options = None
+    verify_authentication_response = None
+    verify_registration_response = None
+    options_to_json = None
+    base64url_to_bytes = None
+    bytes_to_base64url = None
+    AuthenticatorSelectionCriteria = None
+    PublicKeyCredentialDescriptor = None
+    PublicKeyCredentialHint = None
+    ResidentKeyRequirement = None
+    UserVerificationRequirement = None
+
 from services.web import (
     log_and_internal_server_error,
     jsonify,
@@ -40,6 +74,16 @@ from services.web import (
 from services.request_models import AuthCodeRequest, EmailRequest
 from services.async_utils import run_blocking
 from services.csrf import require_csrf
+from services.passkeys import (
+    create_passkey,
+    delete_passkey,
+    get_passkey_by_credential_id,
+    get_passkey_origins,
+    get_passkey_rp_id,
+    get_passkey_rp_name,
+    list_passkeys_for_user,
+    update_passkey_usage,
+)
 from services.users import (
     get_user_by_email,
     get_user_by_id,
@@ -55,6 +99,10 @@ from services.email_service import send_email
 from services.llm_daily_limit import consume_auth_email_daily_quota
 from services.runtime_config import is_production_env
 from services.security import constant_time_compare, generate_verification_code
+from blueprints.verification import (
+    api_send_verification_email,
+    api_verify_registration_code,
+)
 
 # 認証関連の環境変数を初期化する
 # Load environment variables needed by auth flows.
@@ -66,6 +114,7 @@ if not is_production_env():
     os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
 GOOGLE_LOGIN_UNAVAILABLE_ERROR = "Googleログインを現在利用できません。"
+PASSKEY_UNAVAILABLE_ERROR = "Passkeyログインを現在利用できません。"
 
 GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/userinfo.email",
@@ -122,6 +171,22 @@ def _clear_google_oauth_session(session: dict[str, Any]) -> None:
 
 def _google_login_unavailable_response() -> Any:
     return jsonify({"error": GOOGLE_LOGIN_UNAVAILABLE_ERROR}, status_code=503)
+
+
+def _passkey_unavailable_response() -> Any:
+    return jsonify({"status": "fail", "error": PASSKEY_UNAVAILABLE_ERROR}, status_code=503)
+
+
+def _clear_passkey_session(session: dict[str, Any]) -> None:
+    session.pop("passkey_registration_challenge", None)
+    session.pop("passkey_authentication_challenge", None)
+
+
+def _user_id_from_session(session: dict[str, Any]) -> int | None:
+    user_id = session.get("user_id")
+    if isinstance(user_id, int):
+        return user_id
+    return None
 
 
 def _build_absolute_url_from_reference(reference_url: str, path: str) -> str | None:
@@ -280,6 +345,7 @@ async def api_current_user(request: Request):
         session.pop("login_verification_code_issued_at", None)
         session.pop("login_verification_code_attempts", None)
         _clear_google_oauth_session(session)
+        _clear_passkey_session(session)
         set_session_permanent(session, False)
         return jsonify({"logged_in": False})
     else:
@@ -298,6 +364,260 @@ async def login(request: Request):
 async def logout(request: Request):
     request.session.clear()
     return RedirectResponse(frontend_login_url(), status_code=302)
+
+
+@auth_bp.post("/api/auth/send_email_code", name="auth.api_send_email_code")
+async def api_send_email_code(request: Request):
+    data, error_response = await require_json_dict(request, status="fail")
+    if error_response is not None:
+        return error_response
+
+    payload, validation_error = validate_payload_model(
+        data,
+        EmailRequest,
+        error_message="メールアドレスが指定されていません",
+        status="fail",
+    )
+    if validation_error is not None:
+        return validation_error
+
+    user = await run_blocking(get_user_by_email, payload.email)
+    if user and user.get("is_verified"):
+        return await api_send_login_code(request)
+    return await api_send_verification_email(request)
+
+
+@auth_bp.post("/api/auth/verify_email_code", name="auth.api_verify_email_code")
+async def api_verify_email_code(request: Request):
+    session = request.session
+    if session.get("login_verification_code") and session.get("login_temp_user_id"):
+        return await api_verify_login_code(request)
+    if session.get("verification_code") and session.get("temp_user_id"):
+        return await api_verify_registration_code(request)
+    return jsonify(
+        {"status": "fail", "error": "セッション情報がありません。最初からやり直してください"},
+        status_code=400,
+    )
+
+
+@auth_bp.get("/api/passkeys", name="auth.api_list_passkeys")
+async def api_list_passkeys(request: Request):
+    user_id = _user_id_from_session(request.session)
+    if user_id is None:
+        return jsonify({"status": "fail", "error": "ログインが必要です"}, status_code=401)
+
+    passkeys = await run_blocking(list_passkeys_for_user, user_id)
+    return jsonify({"status": "success", "passkeys": passkeys})
+
+
+@auth_bp.post("/api/passkeys/delete", name="auth.api_delete_passkey")
+async def api_delete_passkey(request: Request):
+    user_id = _user_id_from_session(request.session)
+    if user_id is None:
+        return jsonify({"status": "fail", "error": "ログインが必要です"}, status_code=401)
+
+    data, error_response = await require_json_dict(request, status="fail")
+    if error_response is not None:
+        return error_response
+
+    try:
+        passkey_id = int(data.get("passkey_id"))
+    except (TypeError, ValueError):
+        return jsonify({"status": "fail", "error": "Passkeyが指定されていません"}, status_code=400)
+
+    deleted = await run_blocking(delete_passkey, user_id, passkey_id)
+    if not deleted:
+        return jsonify({"status": "fail", "error": "Passkeyが見つかりません"}, status_code=404)
+
+    return jsonify({"status": "success"})
+
+
+@auth_bp.post("/api/passkeys/register/options", name="auth.api_passkey_register_options")
+async def api_passkey_register_options(request: Request):
+    if (
+        generate_registration_options is None
+        or options_to_json is None
+        or AuthenticatorSelectionCriteria is None
+        or ResidentKeyRequirement is None
+        or UserVerificationRequirement is None
+        or PublicKeyCredentialHint is None
+        or PublicKeyCredentialDescriptor is None
+        or base64url_to_bytes is None
+        or bytes_to_base64url is None
+    ):
+        return _passkey_unavailable_response()
+
+    user_id = _user_id_from_session(request.session)
+    if user_id is None:
+        return jsonify({"status": "fail", "error": "ログインが必要です"}, status_code=401)
+
+    user = await run_blocking(get_user_by_id, user_id)
+    if not user:
+        return jsonify({"status": "fail", "error": "ユーザーが存在しません"}, status_code=404)
+
+    existing_passkeys = await run_blocking(list_passkeys_for_user, user_id)
+    exclude_credentials = [
+        PublicKeyCredentialDescriptor(id=base64url_to_bytes(row["credential_id"]))
+        for row in existing_passkeys
+        if isinstance(row.get("credential_id"), str) and row["credential_id"]
+    ]
+
+    options = generate_registration_options(
+        rp_id=get_passkey_rp_id(request),
+        rp_name=get_passkey_rp_name(),
+        user_name=user["email"],
+        user_id=str(user_id).encode("utf-8"),
+        user_display_name=(user.get("username") or user["email"]),
+        authenticator_selection=AuthenticatorSelectionCriteria(
+            resident_key=ResidentKeyRequirement.REQUIRED,
+            user_verification=UserVerificationRequirement.REQUIRED,
+        ),
+        exclude_credentials=exclude_credentials,
+        hints=[
+            PublicKeyCredentialHint.CLIENT_DEVICE,
+            PublicKeyCredentialHint.HYBRID,
+        ],
+    )
+    request.session["passkey_registration_challenge"] = bytes_to_base64url(options.challenge)
+    return jsonify(json.loads(options_to_json(options)))
+
+
+@auth_bp.post("/api/passkeys/register/verify", name="auth.api_passkey_register_verify")
+async def api_passkey_register_verify(request: Request):
+    if (
+        verify_registration_response is None
+        or base64url_to_bytes is None
+        or bytes_to_base64url is None
+    ):
+        return _passkey_unavailable_response()
+
+    user_id = _user_id_from_session(request.session)
+    if user_id is None:
+        return jsonify({"status": "fail", "error": "ログインが必要です"}, status_code=401)
+
+    challenge = request.session.get("passkey_registration_challenge")
+    if not isinstance(challenge, str) or not challenge:
+        return jsonify({"status": "fail", "error": "Passkey登録を最初からやり直してください"}, status_code=400)
+
+    data, error_response = await require_json_dict(request, status="fail")
+    if error_response is not None:
+        return error_response
+
+    credential = data.get("credential")
+    label = data.get("label")
+    if not isinstance(credential, dict):
+        return jsonify({"status": "fail", "error": "Passkeyの応答が不正です"}, status_code=400)
+
+    try:
+        verified = verify_registration_response(
+            credential=credential,
+            expected_challenge=base64url_to_bytes(challenge),
+            expected_rp_id=get_passkey_rp_id(request),
+            expected_origin=get_passkey_origins(request),
+            require_user_verification=True,
+        )
+        passkey = await run_blocking(
+            create_passkey,
+            user_id,
+            bytes_to_base64url(verified.credential_id),
+            bytes_to_base64url(verified.credential_public_key),
+            int(verified.sign_count),
+            aaguid=verified.aaguid,
+            credential_device_type=str(verified.credential_device_type.value),
+            credential_backed_up=bool(verified.credential_backed_up),
+            label=str(label) if isinstance(label, str) else None,
+        )
+    except Exception:
+        logger.exception("Passkey registration verification failed for user %s", user_id)
+        _clear_passkey_session(request.session)
+        return jsonify({"status": "fail", "error": "Passkeyの登録に失敗しました"}, status_code=400)
+
+    _clear_passkey_session(request.session)
+    return jsonify({"status": "success", "passkey": passkey})
+
+
+@auth_bp.post("/api/passkeys/authenticate/options", name="auth.api_passkey_authenticate_options")
+async def api_passkey_authenticate_options(request: Request):
+    if (
+        generate_authentication_options is None
+        or options_to_json is None
+        or UserVerificationRequirement is None
+        or bytes_to_base64url is None
+    ):
+        return _passkey_unavailable_response()
+
+    options = generate_authentication_options(
+        rp_id=get_passkey_rp_id(request),
+        user_verification=UserVerificationRequirement.REQUIRED,
+    )
+    request.session["passkey_authentication_challenge"] = bytes_to_base64url(options.challenge)
+    return jsonify(json.loads(options_to_json(options)))
+
+
+@auth_bp.post("/api/passkeys/authenticate/verify", name="auth.api_passkey_authenticate_verify")
+async def api_passkey_authenticate_verify(request: Request):
+    if (
+        verify_authentication_response is None
+        or base64url_to_bytes is None
+    ):
+        return _passkey_unavailable_response()
+
+    challenge = request.session.get("passkey_authentication_challenge")
+    if not isinstance(challenge, str) or not challenge:
+        return jsonify({"status": "fail", "error": "Passkey認証を最初からやり直してください"}, status_code=400)
+
+    data, error_response = await require_json_dict(request, status="fail")
+    if error_response is not None:
+        return error_response
+
+    credential = data.get("credential")
+    if not isinstance(credential, dict):
+        return jsonify({"status": "fail", "error": "Passkeyの応答が不正です"}, status_code=400)
+
+    credential_id = credential.get("id")
+    if not isinstance(credential_id, str) or not credential_id:
+        return jsonify({"status": "fail", "error": "PasskeyのIDが不正です"}, status_code=400)
+
+    passkey = await run_blocking(get_passkey_by_credential_id, credential_id)
+    if not passkey:
+        _clear_passkey_session(request.session)
+        return jsonify({"status": "fail", "error": "Passkeyが見つかりません"}, status_code=404)
+
+    try:
+        verified = verify_authentication_response(
+            credential=credential,
+            expected_challenge=base64url_to_bytes(challenge),
+            expected_rp_id=get_passkey_rp_id(request),
+            expected_origin=get_passkey_origins(request),
+            credential_public_key=base64url_to_bytes(passkey["public_key"]),
+            credential_current_sign_count=int(passkey["sign_count"] or 0),
+            require_user_verification=True,
+        )
+    except Exception:
+        logger.exception("Passkey authentication verification failed.")
+        _clear_passkey_session(request.session)
+        return jsonify({"status": "fail", "error": "Passkey認証に失敗しました"}, status_code=400)
+
+    user = await run_blocking(get_user_by_id, passkey["user_id"])
+    if not user or not user.get("is_verified"):
+        _clear_passkey_session(request.session)
+        return jsonify({"status": "fail", "error": "ユーザーが存在しないか、認証されていません"}, status_code=400)
+
+    request.session["user_id"] = passkey["user_id"]
+    request.session["user_email"] = user["email"]
+    set_session_permanent(request.session, True)
+    _clear_passkey_session(request.session)
+
+    await run_blocking(
+        update_passkey_usage,
+        int(passkey["id"]),
+        int(verified.new_sign_count),
+        credential_backed_up=bool(verified.credential_backed_up),
+        credential_device_type=str(verified.credential_device_type.value),
+    )
+    await run_blocking(copy_default_tasks_for_user, passkey["user_id"])
+
+    return jsonify({"status": "success", "message": "Passkeyでログインしました"})
 
 
 @auth_bp.get("/google-login", name="auth.google_login")

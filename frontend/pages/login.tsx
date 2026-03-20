@@ -1,5 +1,5 @@
 import AuthGatewayPage from "../components/auth/auth_gateway_page";
 
 export default function LoginPage() {
-  return <AuthGatewayPage initialMode="login" />;
+  return <AuthGatewayPage />;
 }

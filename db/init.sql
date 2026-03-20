@@ -18,6 +18,27 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_users_provider_identity
     ON users (auth_provider, provider_user_id)
     WHERE provider_user_id IS NOT NULL;
 
+CREATE TABLE IF NOT EXISTS user_passkeys (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL,
+    credential_id VARCHAR(255) NOT NULL UNIQUE,
+    public_key TEXT NOT NULL,
+    sign_count BIGINT NOT NULL DEFAULT 0,
+    aaguid VARCHAR(64) NULL,
+    credential_device_type VARCHAR(32) NULL,
+    credential_backed_up BOOLEAN NOT NULL DEFAULT FALSE,
+    label VARCHAR(255) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMP NULL,
+    CONSTRAINT fk_user_passkeys_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_passkeys_user_created_at
+    ON user_passkeys (user_id, created_at DESC);
+
 -- chat_roomsテーブル
 CREATE TABLE chat_rooms (
     id VARCHAR(255) PRIMARY KEY,
