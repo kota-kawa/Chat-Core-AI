@@ -4,7 +4,7 @@ import Head from "next/head";
 import { Outfit } from "next/font/google";
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 
-import { authenticateWithPasskey, browserSupportsPasskeys, registerPasskey } from "../../lib/passkeys";
+import { authenticateWithPasskey, browserSupportsPasskeys, registerPasskey } from "../../scripts/core/passkeys";
 
 type AuthStep = "entry" | "code" | "passkey";
 

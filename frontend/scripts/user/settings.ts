@@ -1,4 +1,4 @@
-import { browserSupportsPasskeys, registerPasskey } from "../../lib/passkeys";
+import { browserSupportsPasskeys, registerPasskey } from "../core/passkeys";
 
 // settings.ts
 // -----------------------------------------------
