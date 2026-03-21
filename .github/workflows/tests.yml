@@ -337,44 +337,26 @@ jobs:
           NGINX_SITE_PATH: ${{ secrets.NGINX_SITE_PATH }}
           NGINX_UPSTREAM_DIR: ${{ secrets.NGINX_UPSTREAM_DIR }}
           NGINX_RELOAD_CMD: ${{ secrets.NGINX_RELOAD_CMD }}
-          # App Environment Variables (ensure these are set in GitHub Secrets)
-          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          Gemini_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          SEND_ADDRESS: ${{ secrets.SEND_ADDRESS }}
-          SEND_PASSWORD: ${{ secrets.SEND_PASSWORD }}
-          FASTAPI_SECRET_KEY: ${{ secrets.FASTAPI_SECRET_KEY }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
-          EMAIL_SEND_PASSWORD: ${{ secrets.EMAIL_SEND_PASSWORD }}
-          FRONTEND_URL: ${{ secrets.FRONTEND_URL || 'https://chatcore-ai.com' }}
         run: |
           set -Eeuo pipefail
           port="${SERVER_PORT:-22}"
           : "${DEPLOY_PATH:?DEPLOY_PATH secret is required}"
 
-          # Create a temporary env file to pass secrets securely
-          cat <<EOF > .env.ci
-          POSTGRES_DB='${POSTGRES_DB}'
-          POSTGRES_USER='${POSTGRES_USER}'
-          POSTGRES_PASSWORD='${POSTGRES_PASSWORD}'
-          GROQ_API_KEY='${GROQ_API_KEY}'
-          Gemini_API_KEY='${Gemini_API_KEY}'
-          SEND_ADDRESS='${SEND_ADDRESS}'
-          SEND_PASSWORD='${SEND_PASSWORD}'
-          EMAIL_SEND_PASSWORD='${EMAIL_SEND_PASSWORD}'
-          FASTAPI_SECRET_KEY='${FASTAPI_SECRET_KEY}'
-          GOOGLE_CLIENT_ID='${GOOGLE_CLIENT_ID}'
-          GOOGLE_CLIENT_SECRET='${GOOGLE_CLIENT_SECRET}'
-          ADMIN_PASSWORD_HASH='${ADMIN_PASSWORD_HASH}'
-          FRONTEND_URL='${FRONTEND_URL}'
-          EOF
-
-          # Upload the secrets file
-          scp -i ~/.ssh/id_rsa -o BatchMode=yes -o StrictHostKeyChecking=accept-new -P "${port}" .env.ci "${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/.env.ci"
+          required_vars=(
+            SERVER_HOST
+            SERVER_USER
+            DEPLOY_PATH
+          )
+          missing_vars=()
+          for var_name in "${required_vars[@]}"; do
+            if [ -z "${!var_name:-}" ]; then
+              missing_vars+=("${var_name}")
+            fi
+          done
+          if [ "${#missing_vars[@]}" -gt 0 ]; then
+            printf 'Missing required GitHub Actions secrets: %s\n' "${missing_vars[*]}" >&2
+            exit 1
+          fi
 
           ssh -i ~/.ssh/id_rsa -o BatchMode=yes -o StrictHostKeyChecking=accept-new -p "${port}" "${SERVER_USER}@${SERVER_HOST}" \
             "export DEPLOY_PATH='${DEPLOY_PATH}' NGINX_SITE_PATH='${NGINX_SITE_PATH}' NGINX_UPSTREAM_DIR='${NGINX_UPSTREAM_DIR}' NGINX_RELOAD_CMD='${NGINX_RELOAD_CMD}'; bash -s" <<'REMOTE_SCRIPT'
@@ -382,21 +364,10 @@ jobs:
 
           cd "${DEPLOY_PATH}"
 
-          # Ensure .env exists
           if [ ! -f .env ]; then
-            cp .env.example .env
+            echo "Required remote env file not found: ${DEPLOY_PATH}/.env" >&2
+            exit 1
           fi
-          
-          # Securely merge .env.ci into .env
-          while IFS='=' read -r key value; do
-            if [ -n "$key" ]; then
-              # Remove existing entry if it exists
-              sed -i "/^${key}=/d" .env
-              # Append the new value
-              echo "${key}=${value}" >> .env
-            fi
-          done < .env.ci
-          rm .env.ci
 
           PREV_COMMIT="$(git rev-parse HEAD)"
           
@@ -434,4 +405,3 @@ jobs:
           echo "Deployment successful."
           trap - ERR
           REMOTE_SCRIPT
-          rm .env.ci
