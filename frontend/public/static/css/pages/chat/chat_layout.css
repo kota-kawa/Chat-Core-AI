@@ -47,6 +47,140 @@
   letter-spacing: 0.01em;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
+.chat-share-btn {
+  color: #fff;
+}
+
+.chat-share-btn--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.chat-share-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2600;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.36);
+}
+
+.chat-share-modal__content {
+  width: min(560px, 100%);
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.2);
+  padding: 1.05rem 1.1rem 1.1rem;
+}
+
+.chat-share-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.chat-share-modal__header h5 {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: var(--text-dark, #1a1a1a);
+}
+
+.chat-share-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-secondary, #6b7280);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.chat-share-close-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text-dark, #1a1a1a);
+}
+
+.chat-share-modal__desc {
+  margin: 0.7rem 0 0;
+  color: var(--text-secondary, #6b7280);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.chat-share-link-row {
+  margin-top: 0.85rem;
+}
+
+#chat-share-link-input {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: #f8faf9;
+  color: var(--text-dark, #1a1a1a);
+  padding: 0.62rem 0.74rem;
+  font-size: 0.92rem;
+}
+
+.chat-share-status {
+  margin: 0.55rem 0 0;
+  min-height: 1.25rem;
+  color: #1b8f5f;
+  font-size: 0.86rem;
+}
+
+.chat-share-status--error {
+  color: #dc2626;
+}
+
+.chat-share-actions {
+  margin-top: 0.72rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chat-share-actions .primary-button {
+  padding: 0.5rem 0.8rem;
+  font-size: 0.84rem;
+}
+
+.chat-share-sns {
+  margin-top: 0.85rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.chat-share-sns a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+  padding: 0.43rem 0.65rem;
+  border-radius: 999px;
+  text-decoration: none;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: var(--text-dark, #1a1a1a);
+  background: #fff;
+  font-size: 0.84rem;
+}
+
+.chat-share-sns a:hover {
+  background: #f2f5f3;
+}
+
 /* メイン 2 カラム */
 .chat-main {
   flex: 1;
@@ -160,5 +294,14 @@
     top: 0.45rem;
     left: 0.5rem;
     font-size: 1.2rem;
+  }
+
+  .chat-share-modal {
+    padding: 0.75rem;
+  }
+
+  .chat-share-modal__content {
+    border-radius: 14px;
+    padding: 0.92rem 0.88rem 0.95rem;
   }
 }

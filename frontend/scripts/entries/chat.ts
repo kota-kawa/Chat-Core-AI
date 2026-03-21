@@ -5,6 +5,7 @@ import "../chat/chat_ui";
 import "../chat/chat_messages";
 import "../chat/chat_history";
 import "../chat/chat_rooms";
+import "../chat/chat_share";
 import "../chat/chat_controller";
 import "../setup/setup";
 import "../core/main";

@@ -41,6 +41,10 @@ class RenameChatRoomRequest(RequestPayloadModel):
     new_title: NonEmptyStr
 
 
+class ShareChatRoomRequest(RequestPayloadModel):
+    room_id: NonEmptyStr
+
+
 class ChatMessageRequest(RequestPayloadModel):
     message: str
     chat_room_id: str = "default"

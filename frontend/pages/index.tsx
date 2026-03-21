@@ -134,9 +134,9 @@ const bodyMarkup = `
     </div>
   </div>
 
-  <div id="chat-container" style="display: none;">
-    <div class="chat-header">
-      <div class="header-left">
+    <div id="chat-container" style="display: none;">
+      <div class="chat-header">
+        <div class="header-left">
         <button
           id="back-to-setup"
           class="icon-button"
@@ -146,6 +146,17 @@ const bodyMarkup = `
           <i class="bi bi-arrow-left"></i>
         </button>
         <span>Chat Core</span>
+      </div>
+      <div class="header-right">
+        <button
+          id="share-chat-btn"
+          class="icon-button chat-share-btn"
+          type="button"
+          data-tooltip="このチャットを共有"
+          data-tooltip-placement="bottom"
+        >
+          <i class="bi bi-share"></i>
+        </button>
       </div>
     </div>
     <div class="chat-main">
@@ -283,6 +294,51 @@ const bodyMarkup = `
           <button type="button" class="custom-btn-secondary" id="cancelTaskEditModal">キャンセル</button>
           <button type="button" class="custom-btn-primary" id="saveTaskChanges">保存</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div
+    id="chat-share-modal"
+    class="chat-share-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-hidden="true"
+    aria-labelledby="chat-share-title"
+    style="display:none;"
+  >
+    <div class="chat-share-modal__content">
+      <div class="chat-share-modal__header">
+        <h5 id="chat-share-title">チャットを共有</h5>
+        <button type="button" id="chat-share-close-btn" class="chat-share-close-btn" aria-label="共有モーダルを閉じる">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      <p class="chat-share-modal__desc">
+        共有リンクを作成すると、このチャットルームの履歴をURL経由で閲覧できます。
+      </p>
+      <div class="chat-share-link-row">
+        <input type="text" id="chat-share-link-input" readonly placeholder="まずリンクを生成してください" />
+      </div>
+      <p id="chat-share-status" class="chat-share-status">共有するチャットルームを選択してください。</p>
+      <div class="chat-share-actions">
+        <button type="button" id="chat-share-create-btn" class="primary-button">リンクを生成</button>
+        <button type="button" id="chat-share-copy-btn" class="primary-button">リンクをコピー</button>
+        <button type="button" id="chat-share-web-btn" class="primary-button">端末で共有</button>
+      </div>
+      <div class="chat-share-sns">
+        <a id="chat-share-sns-x" target="_blank" rel="noopener noreferrer" href="#">
+          <i class="bi bi-twitter"></i>
+          <span>X</span>
+        </a>
+        <a id="chat-share-sns-line" target="_blank" rel="noopener noreferrer" href="#">
+          <i class="bi bi-chat-dots"></i>
+          <span>LINE</span>
+        </a>
+        <a id="chat-share-sns-facebook" target="_blank" rel="noopener noreferrer" href="#">
+          <i class="bi bi-facebook"></i>
+          <span>Facebook</span>
+        </a>
       </div>
     </div>
   </div>

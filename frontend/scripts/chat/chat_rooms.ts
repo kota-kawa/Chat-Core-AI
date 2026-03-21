@@ -140,6 +140,7 @@ function switchChatRoom(roomId: string) {
   window.currentChatRoomId = roomId;
   localStorage.setItem("currentChatRoomId", roomId);
   window.showChatInterface?.();
+  window.refreshChatShareState?.();
   window.closeChatSidebar?.();
   loadChatRooms();
   window.loadLocalChatHistory?.();
@@ -175,6 +176,8 @@ function deleteChatRoom(roomId: string) {
         window.currentChatRoomId = null;
         if (window.chatMessages) window.chatMessages.innerHTML = "";
         localStorage.removeItem("currentChatRoomId");
+        window.refreshChatShareState?.();
+        window.closeChatShareModal?.();
       }
         loadChatRooms();
       }

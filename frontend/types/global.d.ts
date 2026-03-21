@@ -59,6 +59,9 @@ declare global {
     createNewChatRoom?: (roomId: string, title: string) => Promise<unknown>;
     deleteChatRoom?: (roomId: string) => void;
     renameChatRoom?: (roomId: string, newTitle: string) => void;
+    initChatShare?: () => void;
+    refreshChatShareState?: () => void;
+    closeChatShareModal?: () => void;
     sendMessage?: () => void;
     generateResponse?: (message: string, aiModel: string) => void;
     toggleUserMenu?: () => void;

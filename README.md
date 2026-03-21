@@ -38,6 +38,7 @@ Chat-Core-AI is a FastAPI-based AI chat application with email-based authenticat
 ## Key Features
 - **Email-based authentication** with 6‑digit verification codes
 - **Persistent + ephemeral chat** modes
+- **Chat room sharing** via public URLs and SNS link sharing
 - **Prompt sharing** with search and public visibility controls
 - **Groq / Gemini integrations** for LLM responses
 
@@ -238,6 +239,7 @@ Chat-Core-AI は FastAPI で構築した AI チャットアプリです。メー
 ## 主な機能
 - **メール認証**（6 桁コード）
 - **永続／エフェメラル**のチャット
+- **チャット共有リンク**（URL/SNS 共有）
 - **プロンプト共有**（公開・検索）
 - **Groq / Gemini 連携**
 

@@ -67,6 +67,21 @@ CREATE TABLE chat_history (
 CREATE INDEX IF NOT EXISTS idx_chat_history_room_id_id
     ON chat_history (chat_room_id, id);
 
+-- チャット共有リンク管理テーブル
+CREATE TABLE IF NOT EXISTS shared_chat_rooms (
+    id SERIAL PRIMARY KEY,
+    chat_room_id VARCHAR(255) NOT NULL UNIQUE,
+    share_token VARCHAR(128) NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_shared_chat_rooms_room
+        FOREIGN KEY (chat_room_id)
+        REFERENCES chat_rooms(id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_shared_chat_rooms_token_created_at
+    ON shared_chat_rooms (share_token, created_at DESC);
+
 -- 個人ユーザーが管理するプロンプトとfew shot
 CREATE TABLE task_with_examples (
   id SERIAL PRIMARY KEY,

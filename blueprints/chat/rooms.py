@@ -7,7 +7,9 @@ from fastapi import Request
 from services.async_utils import run_blocking
 from services.db import get_db_connection
 from services.chat_service import (
+    create_or_get_shared_chat_token,
     create_chat_room_in_db,
+    get_shared_chat_room_payload,
     rename_chat_room_in_db,
     validate_room_owner,
 )
@@ -16,8 +18,10 @@ from services.request_models import (
     ChatRoomIdRequest,
     NewChatRoomRequest,
     RenameChatRoomRequest,
+    ShareChatRoomRequest,
 )
 from services.web import (
+    frontend_url,
     jsonify,
     log_and_internal_server_error,
     require_json_dict,
@@ -253,3 +257,67 @@ async def rename_chat_room(request: Request):
         if not await run_blocking(ephemeral_store.rename_room, sid, room_id, new_title):
             return jsonify({"error": "該当ルームが存在しません"}, status_code=404)
         return jsonify({"message": "ルーム名を変更しました"}, status_code=200)
+
+
+@chat_bp.post("/api/share_chat_room", name="chat.share_chat_room")
+async def share_chat_room(request: Request):
+    await run_blocking(cleanup_ephemeral_chats)
+    data, error_response = await require_json_dict(request)
+    if error_response is not None:
+        return error_response
+
+    payload, validation_error = validate_payload_model(
+        data,
+        ShareChatRoomRequest,
+        error_message="room_id is required",
+    )
+    if validation_error is not None:
+        return validation_error
+
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "ログインが必要です"}, status_code=403)
+
+    room_id = payload.room_id
+    try:
+        owner_error, owner_status = await run_blocking(
+            validate_room_owner,
+            room_id,
+            user_id,
+            "他ユーザーのチャットルームは共有できません",
+        )
+        if owner_error is not None:
+            return jsonify(owner_error, status_code=owner_status)
+
+        share_token, status_code = await run_blocking(create_or_get_shared_chat_token, room_id)
+        if status_code == 404 or not share_token:
+            return jsonify({"error": "該当ルームが存在しません"}, status_code=404)
+        share_url = frontend_url(f"/shared/{share_token}")
+        return jsonify(
+            {
+                "share_token": share_token,
+                "share_url": share_url,
+            }
+        )
+    except Exception:
+        return log_and_internal_server_error(
+            logger,
+            "Failed to create share link for chat room.",
+        )
+
+
+@chat_bp.get("/api/shared_chat_room", name="chat.shared_chat_room")
+async def shared_chat_room(request: Request):
+    await run_blocking(cleanup_ephemeral_chats)
+    token = (request.query_params.get("token") or "").strip()
+    if not token:
+        return jsonify({"error": "token is required"}, status_code=400)
+
+    try:
+        payload, status_code = await run_blocking(get_shared_chat_room_payload, token)
+        return jsonify(payload, status_code=status_code or 200)
+    except Exception:
+        return log_and_internal_server_error(
+            logger,
+            "Failed to fetch shared chat room payload.",
+        )

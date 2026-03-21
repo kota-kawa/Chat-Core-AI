@@ -388,6 +388,7 @@ function showChatInterface() {
   if (!window.setupContainer || !window.chatContainer) return;
   window.setupContainer.style.display = "none";
   window.chatContainer.style.display = "flex";
+  window.refreshChatShareState?.();
 
   // Markdown パーサはチャット画面表示時に遅延読み込みする
   if (!markdownEnhancementDisabled) void ensureMarkedParser();

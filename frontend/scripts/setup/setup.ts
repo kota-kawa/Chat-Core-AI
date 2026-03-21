@@ -583,6 +583,7 @@ function showSetupForm() {
   if (chatContainer) chatContainer.style.display = "none";
   if (setupContainer) setupContainer.style.display = "block";
   if (setupInfoElement) setupInfoElement.value = "";
+  window.closeChatShareModal?.();
 
   // サイドバーの状態をクリーンアップ
   const sidebar = document.querySelector(".sidebar");
