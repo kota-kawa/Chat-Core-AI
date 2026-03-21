@@ -337,42 +337,101 @@ jobs:
           NGINX_SITE_PATH: ${{ secrets.NGINX_SITE_PATH }}
           NGINX_UPSTREAM_DIR: ${{ secrets.NGINX_UPSTREAM_DIR }}
           NGINX_RELOAD_CMD: ${{ secrets.NGINX_RELOAD_CMD }}
+          # App Environment Variables (ensure these are set in GitHub Secrets)
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          Gemini_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SEND_ADDRESS: ${{ secrets.SEND_ADDRESS }}
+          SEND_PASSWORD: ${{ secrets.SEND_PASSWORD }}
+          FASTAPI_SECRET_KEY: ${{ secrets.FASTAPI_SECRET_KEY }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
+          EMAIL_SEND_PASSWORD: ${{ secrets.EMAIL_SEND_PASSWORD }}
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL || 'https://chatcore-ai.com' }}
         run: |
           set -Eeuo pipefail
           port="${SERVER_PORT:-22}"
           : "${DEPLOY_PATH:?DEPLOY_PATH secret is required}"
+
+          # Create a temporary env file to pass secrets securely
+          cat <<EOF > .env.ci
+          POSTGRES_DB='${POSTGRES_DB}'
+          POSTGRES_USER='${POSTGRES_USER}'
+          POSTGRES_PASSWORD='${POSTGRES_PASSWORD}'
+          GROQ_API_KEY='${GROQ_API_KEY}'
+          Gemini_API_KEY='${Gemini_API_KEY}'
+          SEND_ADDRESS='${SEND_ADDRESS}'
+          SEND_PASSWORD='${SEND_PASSWORD}'
+          EMAIL_SEND_PASSWORD='${EMAIL_SEND_PASSWORD}'
+          FASTAPI_SECRET_KEY='${FASTAPI_SECRET_KEY}'
+          GOOGLE_CLIENT_ID='${GOOGLE_CLIENT_ID}'
+          GOOGLE_CLIENT_SECRET='${GOOGLE_CLIENT_SECRET}'
+          ADMIN_PASSWORD_HASH='${ADMIN_PASSWORD_HASH}'
+          FRONTEND_URL='${FRONTEND_URL}'
+          EOF
+
+          # Upload the secrets file
+          scp -i ~/.ssh/id_rsa -o BatchMode=yes -o StrictHostKeyChecking=accept-new -P "${port}" .env.ci "${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/.env.ci"
+
           ssh -i ~/.ssh/id_rsa -o BatchMode=yes -o StrictHostKeyChecking=accept-new -p "${port}" "${SERVER_USER}@${SERVER_HOST}" \
             "export DEPLOY_PATH='${DEPLOY_PATH}' NGINX_SITE_PATH='${NGINX_SITE_PATH}' NGINX_UPSTREAM_DIR='${NGINX_UPSTREAM_DIR}' NGINX_RELOAD_CMD='${NGINX_RELOAD_CMD}'; bash -s" <<'REMOTE_SCRIPT'
           set -Eeuo pipefail
 
           cd "${DEPLOY_PATH}"
 
+          # Ensure .env exists
+          if [ ! -f .env ]; then
+            cp .env.example .env
+          fi
+          
+          # Securely merge .env.ci into .env
+          while IFS='=' read -r key value; do
+            if [ -n "$key" ]; then
+              # Remove existing entry if it exists
+              sed -i "/^${key}=/d" .env
+              # Append the new value
+              echo "${key}=${value}" >> .env
+            fi
+          done < .env.ci
+          rm .env.ci
+
           PREV_COMMIT="$(git rev-parse HEAD)"
+          
           diagnose() {
-            echo "Deployment diagnostics"
+            echo "--- Deployment Diagnostics ---"
+            echo "Container Status:"
             docker compose -f deploy/docker-compose.bluegreen.yml ps || true
-            docker compose -f deploy/docker-compose.bluegreen.yml logs db redis app_blue app_green frontend_blue frontend_green --tail=200 || true
+            echo "Recent Logs for Core Services:"
+            docker compose -f deploy/docker-compose.bluegreen.yml logs --tail=50 db redis app_blue app_green frontend_blue frontend_green || true
           }
+          
           rollback() {
-            echo "Deploy failed. Rolling back to ${PREV_COMMIT}"
+            echo "Deployment failed. Rolling back to commit ${PREV_COMMIT}..."
             git reset --hard "${PREV_COMMIT}"
+            # Note: blue_green_deploy.sh handles its own traffic rollback if it fails mid-way.
           }
+          
           on_error() {
+            local exit_code=$?
             trap - ERR
+            echo "Error occurred during remote deployment execution (Exit Code: ${exit_code})"
             diagnose
-            rollback || echo "Rollback also failed." >&2
+            rollback || echo "Warning: Rollback failed or was partial." >&2
+            exit "${exit_code}"
           }
           trap on_error ERR
 
+          echo "Fetching latest changes..."
           git fetch origin main
           git reset --hard origin/main
 
-          if [ ! -f .env ]; then
-            cp .env.example .env
-            echo "Created .env from .env.example. Please update it with actual secrets."
-          fi
-
+          echo "Starting blue-green deployment..."
           bash ./deploy/blue_green_deploy.sh
 
+          echo "Deployment successful."
           trap - ERR
           REMOTE_SCRIPT
+          rm .env.ci
