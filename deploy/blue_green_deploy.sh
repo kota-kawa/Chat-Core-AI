@@ -11,6 +11,11 @@ NGINX_TEST_CMD="${NGINX_TEST_CMD:-}"
 NGINX_RELOAD_CMD="${NGINX_RELOAD_CMD:-}"
 DEPLOY_TARGET_COLOR="${DEPLOY_TARGET_COLOR:-}"
 
+is_empty_or_unresolved() {
+  local value="${1:-}"
+  [ -z "${value}" ] || [[ "${value}" =~ ^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?$ ]]
+}
+
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "Required command not found: $1" >&2
@@ -33,6 +38,35 @@ require_env_file() {
   fi
 }
 
+load_env_file() {
+  set +u
+  set -a
+  # shellcheck disable=SC1090
+  . "${ENV_FILE}"
+  set +a
+  set -u
+}
+
+apply_legacy_env_fallback() {
+  local target_var="$1"
+  local legacy_var="$2"
+  local current_value="${!target_var:-}"
+  local legacy_value="${!legacy_var:-}"
+
+  if is_empty_or_unresolved "${current_value}" && ! is_empty_or_unresolved "${legacy_value}"; then
+    export "${target_var}=${legacy_value}"
+    echo "Using legacy environment variable ${legacy_var} for ${target_var}." >&2
+  fi
+}
+
+apply_legacy_env_fallbacks() {
+  apply_legacy_env_fallback POSTGRES_USER MYSQL_USER
+  apply_legacy_env_fallback POSTGRES_PASSWORD MYSQL_PASSWORD
+  apply_legacy_env_fallback POSTGRES_DB MYSQL_DATABASE
+  apply_legacy_env_fallback FASTAPI_SECRET_KEY FLASK_SECRET_KEY
+  apply_legacy_env_fallback FASTAPI_ENV FLASK_ENV
+}
+
 preflight_compose_config() {
   compose config >/dev/null
 }
@@ -46,16 +80,9 @@ validate_required_env() {
   )
   local var_name value missing=0
 
-  set +u
-  set -a
-  # shellcheck disable=SC1090
-  . "${ENV_FILE}"
-  set +a
-  set -u
-
   for var_name in "${required_vars[@]}"; do
     value="${!var_name:-}"
-    if [ -z "${value}" ] || [[ "${value}" =~ ^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?$ ]]; then
+    if is_empty_or_unresolved "${value}"; then
       echo "Required environment variable is empty or unresolved: ${var_name}" >&2
       missing=1
     fi
@@ -68,6 +95,8 @@ validate_required_env() {
 
 require_cmd docker
 require_env_file
+load_env_file
+apply_legacy_env_fallbacks
 preflight_compose_config
 validate_required_env
 
