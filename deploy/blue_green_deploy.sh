@@ -165,7 +165,7 @@ wait_for_service_healthy() {
   local cid status
 
   while [ "${retries}" -gt 0 ]; do
-    cid="$(compose ps -q "${service}" || true)"
+    cid="$(compose ps -a -q "${service}" || true)"
     if [ -z "${cid}" ]; then
       echo "Service ${service} container is missing." >&2
       return 1
@@ -187,6 +187,43 @@ wait_for_service_healthy() {
   done
 
   echo "Timed out waiting for ${service} to become healthy." >&2
+  return 1
+}
+
+wait_for_service_completed() {
+  local service="$1"
+  local retries="${2:-45}"
+  local cid status exit_code
+
+  while [ "${retries}" -gt 0 ]; do
+    cid="$(compose ps -a -q "${service}" || true)"
+    if [ -z "${cid}" ]; then
+      echo "Service ${service} container is missing." >&2
+      return 1
+    fi
+
+    status="$(docker inspect --format='{{.State.Status}}' "${cid}")"
+    case "${status}" in
+      exited)
+        exit_code="$(docker inspect --format='{{.State.ExitCode}}' "${cid}")"
+        if [ "${exit_code}" = "0" ]; then
+          echo "Service ${service} completed successfully."
+          return 0
+        fi
+        echo "Service ${service} exited with code ${exit_code}." >&2
+        return 1
+        ;;
+      dead)
+        echo "Service ${service} is ${status}." >&2
+        return 1
+        ;;
+    esac
+
+    sleep 1
+    retries=$((retries - 1))
+  done
+
+  echo "Timed out waiting for ${service} to complete." >&2
   return 1
 }
 
@@ -234,25 +271,6 @@ write_upstream_files() {
 
   write_text_as_root "${NGINX_UPSTREAM_DIR}/backend_active.conf" "server 127.0.0.1:${backend_port};"$'\n'
   write_text_as_root "${NGINX_UPSTREAM_DIR}/frontend_active.conf" "server 127.0.0.1:${frontend_port};"$'\n'
-}
-
-bootstrap_nginx_upstreams() {
-  local current_color="$1"
-  local target_color="$2"
-  local bootstrap_color="${current_color}"
-
-  if [ "${bootstrap_color}" = "none" ]; then
-    bootstrap_color="${target_color}"
-  fi
-
-  if [ ! -f "${NGINX_UPSTREAM_DIR}/backend_active.conf" ] || [ ! -f "${NGINX_UPSTREAM_DIR}/frontend_active.conf" ]; then
-    echo "Bootstrapping nginx upstream include files for ${bootstrap_color}."
-    write_upstream_files "${bootstrap_color}"
-  else
-    run_root install -d -m 755 "${NGINX_UPSTREAM_DIR}"
-  fi
-
-  install_nginx_site_config
 }
 
 write_active_upstreams() {
@@ -322,9 +340,17 @@ next_color() {
 }
 
 start_core_services() {
-  compose up -d db redis
+  local bootstrap_color="${CURRENT_COLOR}"
+
+  if [ "${bootstrap_color}" = "none" ]; then
+    bootstrap_color="${TARGET_COLOR}"
+  fi
+
+  compose rm -f nginx_bootstrap >/dev/null 2>&1 || true
+  NGINX_BOOTSTRAP_COLOR="${bootstrap_color}" compose up -d db redis nginx_bootstrap
   wait_for_service_healthy db 90
   wait_for_service_healthy redis 90
+  wait_for_service_completed nginx_bootstrap 45
 }
 
 build_runtime_images() {
@@ -378,8 +404,6 @@ if [ "${TARGET_COLOR}" = "${CURRENT_COLOR}" ] && [ "${CURRENT_COLOR}" != "none" 
   echo "Target color matches the active color (${CURRENT_COLOR}). Choose the inactive color instead." >&2
   exit 1
 fi
-
-bootstrap_nginx_upstreams "${CURRENT_COLOR}" "${TARGET_COLOR}"
 
 SWITCHED=0
 

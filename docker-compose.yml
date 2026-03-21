@@ -118,5 +118,35 @@ services:
       start_period: 5s
     restart: unless-stopped
 
+  nginx_bootstrap:
+    image: alpine:3.20
+    environment:
+      NGINX_UPSTREAM_DIR: ${NGINX_UPSTREAM_DIR:-/etc/nginx/chatcore-ai/upstreams}
+      NGINX_BOOTSTRAP_COLOR: ${NGINX_BOOTSTRAP_COLOR:-blue}
+    volumes:
+      - ${NGINX_UPSTREAM_DIR:-/etc/nginx/chatcore-ai/upstreams}:${NGINX_UPSTREAM_DIR:-/etc/nginx/chatcore-ai/upstreams}
+    command:
+      - /bin/sh
+      - -ceu
+      - |
+        case "$$NGINX_BOOTSTRAP_COLOR" in
+          blue)
+            backend_port=5004
+            frontend_port=3000
+            ;;
+          green)
+            backend_port=5005
+            frontend_port=3001
+            ;;
+          *)
+            echo "Unsupported NGINX_BOOTSTRAP_COLOR: $$NGINX_BOOTSTRAP_COLOR" >&2
+            exit 1
+            ;;
+        esac
+        mkdir -p "$$NGINX_UPSTREAM_DIR"
+        printf 'server 127.0.0.1:%s;\n' "$$backend_port" > "$$NGINX_UPSTREAM_DIR/backend_active.conf"
+        printf 'server 127.0.0.1:%s;\n' "$$frontend_port" > "$$NGINX_UPSTREAM_DIR/frontend_active.conf"
+    restart: "no"
+
 volumes:
   db_data:
