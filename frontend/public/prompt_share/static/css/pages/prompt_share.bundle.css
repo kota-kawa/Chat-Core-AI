@@ -219,16 +219,17 @@ body.prompt-share-page.ps-modal-open #promptDetailModal.show {
 
 .search-box {
   position: relative;
-  border: 1px solid var(--ps-border);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 999px;
-  background: #ffffff;
-  box-shadow: 0 1px 6px rgba(32, 33, 36, 0.24);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(12px);
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .search-box:focus-within {
-  border-color: #aecbfa;
-  box-shadow: 0 2px 12px rgba(26, 115, 232, 0.3);
+  border-color: rgba(174, 203, 250, 0.85);
+  box-shadow: 0 8px 32px rgba(26, 115, 232, 0.22);
 }
 
 .search-box input {
@@ -364,28 +365,28 @@ body.prompt-share-page.ps-modal-open #promptDetailModal.show {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-start;
-  gap: 1rem;
+  gap: 0.5rem;
 }
 
 .category-card {
-  flex: 0 0 calc(50% - 0.5rem);
-  max-width: calc(50% - 0.5rem);
+  flex: 0 0 calc(33.33% - 0.34rem);
+  max-width: calc(33.33% - 0.34rem);
   appearance: none;
   border: 1px solid #dce7f3;
-  border-radius: 16px;
+  border-radius: 10px;
   background: #ffffff;
   color: #20476f;
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 0.7rem;
-  min-height: 68px;
-  padding: 0.85rem 0.95rem;
-  font-size: 0.98rem;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   text-align: left;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease,
@@ -398,12 +399,12 @@ body.prompt-share-page.ps-modal-open #promptDetailModal.show {
 }
 
 .category-card i {
-  width: 2rem;
-  height: 2rem;
+  width: 1.6rem;
+  height: 1.6rem;
   border-radius: 999px;
   background: rgba(72, 147, 224, 0.12);
   color: #3c7fcc;
-  font-size: 0.95rem;
+  font-size: 0.8rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -411,16 +412,16 @@ body.prompt-share-page.ps-modal-open #promptDetailModal.show {
 }
 
 .category-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-1px);
   border-color: rgba(72, 147, 224, 0.45);
-  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.09);
 }
 
 .category-card.active {
   background: linear-gradient(180deg, rgba(239, 247, 255, 0.98) 0%, #ffffff 100%);
   border-color: rgba(72, 147, 224, 0.5);
   color: #163c66;
-  box-shadow: 0 16px 32px rgba(56, 111, 172, 0.16);
+  box-shadow: 0 8px 16px rgba(56, 111, 172, 0.12);
 }
 
 .category-card.active i {
@@ -510,16 +511,16 @@ body.prompt-share-page.ps-modal-open #promptDetailModal.show {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.76rem;
-  min-height: 228px;
-  border-radius: 18px;
-  border: 1px solid #e3ebe7;
+  gap: 0.72rem;
+  border-radius: 16px;
+  border: 2px solid #dde8f5;
   background: #ffffff;
   padding: 1rem;
   cursor: pointer;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.06);
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 12px rgba(65, 111, 158, 0.12);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
   overflow: visible;
+  user-select: none;
 }
 
 .prompt-share-page .prompt-card::before {
@@ -527,9 +528,15 @@ body.prompt-share-page.ps-modal-open #promptDetailModal.show {
 }
 
 .prompt-share-page .prompt-card:hover {
-  transform: translateY(-3px);
-  border-color: rgba(72, 147, 224, 0.28);
-  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+  border-color: #a8c8e8;
+  box-shadow: 0 8px 16px rgba(61, 108, 157, 0.18);
+}
+
+.prompt-share-page .prompt-card:active {
+  transform: translateY(1px);
+  box-shadow: 0 3px 8px rgba(65, 111, 158, 0.15);
+  border-color: #a8c8e8;
 }
 
 .prompt-share-page .prompt-card.menu-open {
@@ -549,28 +556,29 @@ body.prompt-share-page.ps-modal-open #promptDetailModal.show {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: #537298;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #1a73e8;
   border-radius: 999px;
-  border: 1px solid #e3ecf5;
-  background: #f8fbff;
-  padding: 0.24rem 0.58rem;
+  border: 2px solid #d0e4fa;
+  background: #eaf3ff;
+  padding: 0.2rem 0.55rem;
   line-height: 1.2;
+  letter-spacing: 0.01em;
 }
 
 .prompt-share-page .prompt-card__category-pill i {
-  font-size: 0.7rem;
-  color: #6f9ad0;
+  font-size: 0.68rem;
+  color: #1a73e8;
 }
 
 .prompt-share-page .prompt-card h3 {
   margin: 0;
   position: relative;
   z-index: 1;
-  font-size: 1.02rem;
-  line-height: 1.42;
-  color: #1f2d28;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: #1a2433;
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -582,12 +590,11 @@ body.prompt-share-page.ps-modal-open #promptDetailModal.show {
 
 .prompt-share-page .prompt-card__content {
   margin: 0;
-  min-height: 4.6em;
   position: relative;
   z-index: 1;
-  color: #667482;
-  font-size: 0.89rem;
-  line-height: 1.62;
+  color: #5a6a7a;
+  font-size: 0.875rem;
+  line-height: 1.6;
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -615,33 +622,33 @@ body.prompt-share-page.ps-modal-open #promptDetailModal.show {
   display: inline-flex;
   align-items: center;
   gap: 0.24rem;
-  border-radius: 999px;
-  border: 1px solid #eef2f6;
-  color: #6d7f91;
-  background: #fbfdff;
+  border-radius: 6px;
+  border: none;
+  color: #7a8fa3;
+  background: transparent;
   font-size: 0.72rem;
-  padding: 0.2rem 0.5rem;
+  padding: 0.1rem 0.2rem;
 }
 
 .prompt-share-page .prompt-meta-pill i {
   font-size: 0.68rem;
-  color: #8ba4c3;
+  color: #9ab0c5;
 }
 
 .prompt-share-page .prompt-actions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.4rem;
-  border-top: 1px solid #eef3f7;
+  border-top: 2px solid #eef3f7;
   padding-top: 0.52rem;
 }
 
 .prompt-share-page .prompt-action-btn,
 .prompt-share-page .meatball-menu {
-  border: 1px solid #eef3f7;
-  border-radius: 999px;
-  background: #ffffff;
-  color: #5d748f;
+  border: 2px solid #e2ecf7;
+  border-radius: 10px;
+  background: #f4f9ff;
+  color: #4a6580;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -649,7 +656,9 @@ body.prompt-share-page.ps-modal-open #promptDetailModal.show {
   gap: 0.26rem;
   min-height: 36px;
   padding: 0.34rem 0.38rem;
-  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+  box-shadow: 0 2px 6px rgba(97, 143, 186, 0.2);
+  transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+  user-select: none;
 }
 
 .prompt-share-page .prompt-action-btn i,
@@ -659,21 +668,29 @@ body.prompt-share-page.ps-modal-open #promptDetailModal.show {
 
 .prompt-share-page .prompt-action-btn span {
   font-size: 0.7rem;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .prompt-share-page .prompt-action-btn:hover,
 .prompt-share-page .meatball-menu:hover {
-  background: #f8fbff;
-  border-color: rgba(72, 147, 224, 0.22);
-  color: #1d4f88;
+  background: #e0f0ff;
+  border-color: #9ec8f0;
+  color: #1a5fa8;
   transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(87, 134, 177, 0.24);
+}
+
+.prompt-share-page .prompt-action-btn:active,
+.prompt-share-page .meatball-menu:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 5px rgba(97, 143, 186, 0.2);
 }
 
 .prompt-share-page .bookmark-btn.bookmarked {
-  color: #1f7a4b;
-  background: rgba(230, 244, 234, 0.96);
-  border-color: rgba(114, 191, 146, 0.32);
+  color: #1a7a4a;
+  background: #e6f7ed;
+  border-color: #7ec89a;
+  box-shadow: 0 2px 6px rgba(58, 141, 95, 0.28);
 }
 
 .prompt-share-page .bookmark-btn.bookmarked span {
@@ -681,9 +698,10 @@ body.prompt-share-page.ps-modal-open #promptDetailModal.show {
 }
 
 .prompt-share-page .like-btn.liked {
-  color: #c0392b;
-  background: rgba(252, 232, 230, 0.96);
-  border-color: rgba(236, 151, 145, 0.32);
+  color: #d93025;
+  background: #fde8e7;
+  border-color: #f0908a;
+  box-shadow: 0 2px 6px rgba(203, 92, 85, 0.28);
 }
 
 .prompt-share-page .meatball-menu {
@@ -713,7 +731,7 @@ body.prompt-share-page.ps-modal-open #promptDetailModal.show {
   gap: 0.16rem;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-5px);
+  transform: translateY(-2px);
   transition: opacity 0.14s ease, transform 0.14s ease, visibility 0.14s ease;
   z-index: 45;
 }
@@ -975,6 +993,41 @@ body.prompt-share-page.ps-modal-open #promptDetailModal.show {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .category-card,
+  .prompt-share-page .prompt-card,
+  .prompt-share-page .prompt-action-btn,
+  .prompt-share-page .meatball-menu,
+  .prompt-share-page .prompt-actions-dropdown,
+  .new-prompt-btn,
+  .new-prompt-btn i,
+  .new-prompt-btn i.rotating {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .category-card:hover,
+  .prompt-share-page .prompt-card:hover,
+  .prompt-share-page .prompt-card:active,
+  .prompt-share-page .prompt-action-btn:hover,
+  .prompt-share-page .meatball-menu:hover,
+  .prompt-share-page .prompt-action-btn:active,
+  .prompt-share-page .meatball-menu:active,
+  .new-prompt-btn:hover {
+    transform: none;
+  }
+
+  .prompt-share-page .prompt-actions-dropdown,
+  .prompt-share-page .prompt-actions-dropdown.is-open {
+    transform: none;
+  }
+
+  .new-prompt-btn i.rotating {
+    animation: none;
+  }
+}
+
 .guardrail-info {
   margin-top: 0.85rem;
   border-radius: 10px;
@@ -1063,15 +1116,15 @@ body.prompt-share-page.ps-modal-open #promptDetailModal.show {
 
   .category-list {
     justify-content: flex-start;
-    gap: 0.75rem;
+    gap: 0.5rem;
   }
 
   .category-card {
-    flex: 0 0 calc(50% - 0.375rem);
-    max-width: calc(50% - 0.375rem);
-    min-height: 60px;
-    font-size: 0.9rem;
-    padding: 0.72rem 0.8rem;
+    flex: 0 0 calc(50% - 0.25rem);
+    max-width: calc(50% - 0.25rem);
+    min-height: 40px;
+    font-size: 0.85rem;
+    padding: 0.4rem 0.65rem;
   }
 
   .prompt-share-page .prompt-cards {
@@ -1134,10 +1187,10 @@ body.prompt-share-page.ps-modal-open #promptDetailModal.show {
   }
 
   .category-card {
-    flex: 1 1 100%;
-    max-width: 100%;
-    min-height: 56px;
-    font-size: 0.88rem;
+    flex: 0 0 calc(50% - 0.25rem);
+    max-width: calc(50% - 0.25rem);
+    min-height: 40px;
+    font-size: 0.82rem;
   }
 
   .prompt-share-page .prompt-card h3 {
