@@ -134,15 +134,26 @@ async function requestJson(url: string, init?: RequestInit): Promise<JsonRecord>
 }
 
 function isPasskeyCancellationError(error: unknown): boolean {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-
-  const errorName = String((error as { name?: unknown }).name || "");
-  const message = String(error.message || "").toLowerCase();
+  const rawName = (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error
+  )
+    ? (error as { name?: unknown }).name
+    : undefined;
+  const rawMessage = (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error
+  )
+    ? (error as { message?: unknown }).message
+    : error;
+  const errorName = String(rawName || "");
+  const message = String(rawMessage || "").toLowerCase();
   return (
     errorName === "NotAllowedError" ||
     errorName === "AbortError" ||
+    message.includes("the operation either timed out or was not allowed") ||
     message.includes("timed out or was not allowed")
   );
 }
