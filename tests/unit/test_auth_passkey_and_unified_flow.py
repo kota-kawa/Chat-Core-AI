@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from blueprints.auth import (
+    api_passkey_authenticate_options,
     api_passkey_authenticate_verify,
     api_passkey_register_options,
     api_send_email_code,
@@ -16,6 +17,10 @@ from tests.helpers.request_helpers import build_request
 
 def make_request(path: str, *, json_body=None, session=None):
     return build_request(method="POST", path=path, json_body=json_body, session=session)
+
+
+async def immediate_run_blocking(func, *args, **kwargs):
+    return func(*args, **kwargs)
 
 
 class UnifiedEmailAuthFlowTestCase(unittest.TestCase):
@@ -91,6 +96,20 @@ class UnifiedEmailAuthFlowTestCase(unittest.TestCase):
 
 
 class PasskeyRouteTestCase(unittest.TestCase):
+    def test_passkey_authenticate_options_returns_429_when_rate_limited(self):
+        request = make_request("/api/passkeys/authenticate/options", session={})
+
+        with patch(
+            "blueprints.auth.consume_passkey_auth_options_limit",
+            return_value=(False, "too many attempts"),
+        ):
+            response = asyncio.run(api_passkey_authenticate_options(request))
+
+        payload = json.loads(response.body.decode())
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(payload["status"], "fail")
+        self.assertEqual(payload["error"], "too many attempts")
+
     def test_passkey_register_options_requires_login(self):
         request = make_request("/api/passkeys/register/options", session={})
         response = asyncio.run(api_passkey_register_options(request))
@@ -118,7 +137,8 @@ class PasskeyRouteTestCase(unittest.TestCase):
                         ),
                     ):
                         with patch("blueprints.auth.bytes_to_base64url", return_value="challenge-token"):
-                            response = asyncio.run(api_passkey_register_options(request))
+                            with patch("blueprints.auth.run_blocking", new=immediate_run_blocking):
+                                response = asyncio.run(api_passkey_register_options(request))
 
         payload = json.loads(response.body.decode())
         self.assertEqual(response.status_code, 200)
@@ -161,10 +181,12 @@ class PasskeyRouteTestCase(unittest.TestCase):
                         "blueprints.auth.get_user_by_id",
                         return_value={"id": 7, "email": "user@example.com", "is_verified": True},
                     ):
-                        with patch("blueprints.auth.update_passkey_usage"):
-                            with patch("blueprints.auth.copy_default_tasks_for_user"):
-                                with patch("blueprints.auth.time.time", return_value=1001):
-                                    response = asyncio.run(api_passkey_authenticate_verify(request))
+                        with patch("blueprints.auth.consume_passkey_auth_verify_limit", return_value=(True, None)):
+                            with patch("blueprints.auth.update_passkey_usage"):
+                                with patch("blueprints.auth.copy_default_tasks_for_user"):
+                                    with patch("blueprints.auth.time.time", return_value=1001):
+                                        with patch("blueprints.auth.run_blocking", new=immediate_run_blocking):
+                                            response = asyncio.run(api_passkey_authenticate_verify(request))
 
         payload = json.loads(response.body.decode())
         self.assertEqual(response.status_code, 200)
@@ -188,8 +210,9 @@ class PasskeyRouteTestCase(unittest.TestCase):
             session=session,
         )
 
-        with patch("blueprints.auth.time.time", return_value=1400):
-            response = asyncio.run(api_passkey_authenticate_verify(request))
+        with patch("blueprints.auth.consume_passkey_auth_verify_limit", return_value=(True, None)):
+            with patch("blueprints.auth.time.time", return_value=1400):
+                response = asyncio.run(api_passkey_authenticate_verify(request))
 
         payload = json.loads(response.body.decode())
         self.assertEqual(response.status_code, 400)
@@ -230,15 +253,42 @@ class PasskeyRouteTestCase(unittest.TestCase):
                         "blueprints.auth.get_user_by_id",
                         return_value={"id": 7, "email": "user@example.com", "is_verified": True},
                     ):
-                        with patch("blueprints.auth.update_passkey_usage", side_effect=RuntimeError("db error")):
-                            with patch("blueprints.auth.copy_default_tasks_for_user"):
-                                with patch("blueprints.auth.time.time", return_value=1001):
-                                    response = asyncio.run(api_passkey_authenticate_verify(request))
+                        with patch("blueprints.auth.consume_passkey_auth_verify_limit", return_value=(True, None)):
+                            with patch("blueprints.auth.update_passkey_usage", side_effect=RuntimeError("db error")):
+                                with patch("blueprints.auth.copy_default_tasks_for_user"):
+                                    with patch("blueprints.auth.time.time", return_value=1001):
+                                        with patch("blueprints.auth.run_blocking", new=immediate_run_blocking):
+                                            response = asyncio.run(api_passkey_authenticate_verify(request))
 
         payload = json.loads(response.body.decode())
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["status"], "success")
         self.assertEqual(session["user_id"], 7)
+
+    def test_passkey_authentication_verify_returns_429_when_rate_limited(self):
+        session = {
+            "passkey_authentication": {
+                "challenge": "challenge-token",
+                "issued_at": 1000,
+                "ceremony_id": "ceremony-1",
+            }
+        }
+        request = make_request(
+            "/api/passkeys/authenticate/verify",
+            json_body={"credential": {"id": "cred-1", "rawId": "cred-1", "response": {}}},
+            session=session,
+        )
+
+        with patch(
+            "blueprints.auth.consume_passkey_auth_verify_limit",
+            return_value=(False, "too many attempts"),
+        ):
+            response = asyncio.run(api_passkey_authenticate_verify(request))
+
+        payload = json.loads(response.body.decode())
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(payload["status"], "fail")
+        self.assertEqual(payload["error"], "too many attempts")
 
 
 if __name__ == "__main__":

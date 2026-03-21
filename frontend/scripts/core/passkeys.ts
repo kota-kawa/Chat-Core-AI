@@ -1,4 +1,12 @@
 type JsonRecord = Record<string, unknown>;
+type PasskeyAction = "authenticate" | "register";
+
+export class PasskeyCancelledError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PasskeyCancelledError";
+  }
+}
 
 function base64UrlToArrayBuffer(value: string): ArrayBuffer {
   const padding = "=".repeat((4 - (value.length % 4 || 4)) % 4);
@@ -125,6 +133,38 @@ async function requestJson(url: string, init?: RequestInit): Promise<JsonRecord>
   return payload;
 }
 
+function isPasskeyCancellationError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const errorName = String((error as { name?: unknown }).name || "");
+  const message = String(error.message || "").toLowerCase();
+  return (
+    errorName === "NotAllowedError" ||
+    errorName === "AbortError" ||
+    message.includes("timed out or was not allowed")
+  );
+}
+
+function normalizePasskeyBrowserError(error: unknown, action: PasskeyAction): Error {
+  if (isPasskeyCancellationError(error)) {
+    return new PasskeyCancelledError(
+      action === "authenticate"
+        ? "Passkey認証はキャンセルされました。メールまたはGoogleでも続けられます。"
+        : "Passkey登録はキャンセルされました。必要なときにもう一度お試しください。"
+    );
+  }
+
+  if (error instanceof Error) {
+    return error;
+  }
+
+  return new Error(
+    action === "authenticate" ? "Passkey認証に失敗しました。" : "Passkey登録に失敗しました。"
+  );
+}
+
 export function browserSupportsPasskeys(): boolean {
   return typeof window !== "undefined" && typeof window.PublicKeyCredential !== "undefined";
 }
@@ -138,10 +178,15 @@ export async function authenticateWithPasskey(): Promise<JsonRecord> {
     method: "POST"
   });
   const requestOptions = requestOptionsFromJson(optionsPayload);
-  const credential = await navigator.credentials.get(requestOptions);
+  let credential: Credential | null;
+  try {
+    credential = await navigator.credentials.get(requestOptions);
+  } catch (error) {
+    throw normalizePasskeyBrowserError(error, "authenticate");
+  }
 
   if (!(credential instanceof PublicKeyCredential)) {
-    throw new Error("Passkey認証がキャンセルされました。");
+    throw new PasskeyCancelledError("Passkey認証はキャンセルされました。メールまたはGoogleでも続けられます。");
   }
 
   return requestJson("/api/passkeys/authenticate/verify", {
@@ -160,10 +205,15 @@ export async function registerPasskey(label?: string): Promise<JsonRecord> {
     method: "POST"
   });
   const creationOptions = creationOptionsFromJson(optionsPayload);
-  const credential = await navigator.credentials.create(creationOptions);
+  let credential: Credential | null;
+  try {
+    credential = await navigator.credentials.create(creationOptions);
+  } catch (error) {
+    throw normalizePasskeyBrowserError(error, "register");
+  }
 
   if (!(credential instanceof PublicKeyCredential)) {
-    throw new Error("Passkey登録がキャンセルされました。");
+    throw new PasskeyCancelledError("Passkey登録はキャンセルされました。必要なときにもう一度お試しください。");
   }
 
   return requestJson("/api/passkeys/register/verify", {

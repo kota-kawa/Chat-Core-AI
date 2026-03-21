@@ -165,6 +165,8 @@ class VerificationCodeLimitsTestCase(unittest.TestCase):
         payload = json.loads(response.body.decode("utf-8"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["status"], "success")
+        self.assertEqual(payload["flow"], "login")
+        self.assertFalse(payload["offer_passkey_setup"])
         self.assertEqual(session["user_id"], 12)
         self.assertEqual(session["user_email"], "user@example.com")
         self.assertTrue(session["_permanent"])
@@ -214,6 +216,8 @@ class VerificationCodeLimitsTestCase(unittest.TestCase):
         payload = json.loads(response.body.decode("utf-8"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["status"], "success")
+        self.assertEqual(payload["flow"], "login")
+        self.assertFalse(payload["offer_passkey_setup"])
         self.assertEqual(session["user_id"], 12)
 
     def test_verify_registration_code_sets_permanent_and_rotates_session(self):
@@ -239,6 +243,8 @@ class VerificationCodeLimitsTestCase(unittest.TestCase):
         payload = json.loads(response.body.decode("utf-8"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["status"], "success")
+        self.assertEqual(payload["flow"], "register")
+        self.assertTrue(payload["offer_passkey_setup"])
         self.assertEqual(session["user_id"], 7)
         self.assertEqual(session["user_email"], "user@example.com")
         self.assertTrue(session["_permanent"])

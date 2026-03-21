@@ -186,4 +186,10 @@ async def api_verify_registration_code(request: Request):
     # Clear temporary verification session data.
     _clear_registration_verification_session(session)
 
-    return jsonify({"status": "success"})
+    return jsonify(
+        {
+            "status": "success",
+            "flow": "register",
+            "offer_passkey_setup": True,
+        }
+    )

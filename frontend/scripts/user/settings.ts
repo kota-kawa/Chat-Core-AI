@@ -1,4 +1,4 @@
-import { browserSupportsPasskeys, registerPasskey } from "../core/passkeys";
+import { browserSupportsPasskeys, PasskeyCancelledError, registerPasskey } from "../core/passkeys";
 
 // settings.ts
 // -----------------------------------------------
@@ -588,6 +588,9 @@ const initSettingsPage = () => {
       alert("Passkeyを追加しました。");
       await loadPasskeys();
     } catch (error) {
+      if (error instanceof PasskeyCancelledError) {
+        return;
+      }
       alert((error as Error).message);
     } finally {
       registerPasskeyBtn.disabled = false;

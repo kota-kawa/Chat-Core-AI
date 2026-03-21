@@ -20,6 +20,9 @@ DEFAULT_AUTH_EMAIL_WINDOW_SECONDS = 600
 DEFAULT_AUTH_EMAIL_COOLDOWN_SECONDS = 60
 DEFAULT_ADMIN_LOGIN_PER_IP_LIMIT = 10
 DEFAULT_ADMIN_LOGIN_WINDOW_SECONDS = 900
+DEFAULT_PASSKEY_AUTH_OPTIONS_PER_IP_LIMIT = 30
+DEFAULT_PASSKEY_AUTH_VERIFY_PER_IP_LIMIT = 30
+DEFAULT_PASSKEY_AUTH_WINDOW_SECONDS = 300
 
 _in_memory_lock = Lock()
 _in_memory_windows: dict[str, tuple[int, float]] = {}
@@ -256,6 +259,64 @@ def consume_admin_login_limit(request: Request) -> tuple[bool, str | None]:
         False,
         (
             "管理者ログインの試行回数が多すぎます。"
+            f"{retry_after}秒ほど待ってから再試行してください。"
+        ),
+    )
+
+
+def consume_passkey_auth_options_limit(request: Request) -> tuple[bool, str | None]:
+    client_ip = get_request_client_ip(request)
+    per_ip_limit = _get_positive_int_env(
+        "PASSKEY_AUTH_OPTIONS_PER_IP_LIMIT",
+        DEFAULT_PASSKEY_AUTH_OPTIONS_PER_IP_LIMIT,
+    )
+    window_seconds = _get_positive_int_env(
+        "PASSKEY_AUTH_WINDOW_SECONDS",
+        DEFAULT_PASSKEY_AUTH_WINDOW_SECONDS,
+    )
+
+    allowed, _, retry_after = consume_rate_limit(
+        "passkey_auth_options:ip",
+        client_ip,
+        limit=per_ip_limit,
+        window_seconds=window_seconds,
+    )
+    if allowed:
+        return True, None
+
+    return (
+        False,
+        (
+            "Passkey認証の開始回数が多すぎます。"
+            f"{retry_after}秒ほど待ってから再試行してください。"
+        ),
+    )
+
+
+def consume_passkey_auth_verify_limit(request: Request) -> tuple[bool, str | None]:
+    client_ip = get_request_client_ip(request)
+    per_ip_limit = _get_positive_int_env(
+        "PASSKEY_AUTH_VERIFY_PER_IP_LIMIT",
+        DEFAULT_PASSKEY_AUTH_VERIFY_PER_IP_LIMIT,
+    )
+    window_seconds = _get_positive_int_env(
+        "PASSKEY_AUTH_WINDOW_SECONDS",
+        DEFAULT_PASSKEY_AUTH_WINDOW_SECONDS,
+    )
+
+    allowed, _, retry_after = consume_rate_limit(
+        "passkey_auth_verify:ip",
+        client_ip,
+        limit=per_ip_limit,
+        window_seconds=window_seconds,
+    )
+    if allowed:
+        return True, None
+
+    return (
+        False,
+        (
+            "Passkey認証の試行回数が多すぎます。"
             f"{retry_after}秒ほど待ってから再試行してください。"
         ),
     )

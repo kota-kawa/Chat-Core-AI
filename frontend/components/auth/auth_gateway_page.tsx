@@ -3,9 +3,16 @@ import { Outfit } from "next/font/google";
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 
 import { ensureCsrfProtection } from "../../scripts/core/csrf";
-import { authenticateWithPasskey, browserSupportsPasskeys, registerPasskey } from "../../scripts/core/passkeys";
+import {
+  authenticateWithPasskey,
+  browserSupportsPasskeys,
+  PasskeyCancelledError,
+  registerPasskey
+} from "../../scripts/core/passkeys";
 
 type AuthStep = "entry" | "code" | "passkey";
+type EmailAuthFlow = "login" | "register" | null;
+type PasskeySetupProvider = "email" | "google" | null;
 
 const REDIRECT_DELAY_MS = 1200;
 const MODAL_AUTO_CLOSE_MS = 2200;
@@ -28,6 +35,8 @@ export default function AuthGatewayPage() {
   const [modalMessage, setModalMessage] = useState<string | null>(null);
   const [isModalClosing, setIsModalClosing] = useState(false);
   const [supportsPasskeys, setSupportsPasskeys] = useState(false);
+  const [emailAuthFlow, setEmailAuthFlow] = useState<EmailAuthFlow>(null);
+  const [passkeySetupProvider, setPasskeySetupProvider] = useState<PasskeySetupProvider>(null);
 
   const modalAutoCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const modalCloseAnimationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -62,10 +71,42 @@ export default function AuthGatewayPage() {
     }, MODAL_AUTO_CLOSE_MS);
   };
 
-  const scheduleRedirectHome = () => {
+  const sanitizeNextPath = (rawNextPath: string | null): string => {
+    if (!rawNextPath) return "/";
+    if (!rawNextPath.startsWith("/")) return "/";
+
+    try {
+      const targetUrl = new URL(rawNextPath, window.location.origin);
+      if (targetUrl.origin !== window.location.origin) {
+        return "/";
+      }
+      return `${targetUrl.pathname}${targetUrl.search}${targetUrl.hash}` || "/";
+    } catch {
+      return "/";
+    }
+  };
+
+  const getSearchParams = (): URLSearchParams => {
+    if (typeof window === "undefined") {
+      return new URLSearchParams();
+    }
+    return new URLSearchParams(window.location.search);
+  };
+
+  const getPostAuthRedirectPath = (): string => sanitizeNextPath(getSearchParams().get("next"));
+
+  const buildGoogleLoginUrl = (): string => {
+    const nextPath = getPostAuthRedirectPath();
+    if (nextPath === "/") {
+      return "/google-login";
+    }
+    return `/google-login?${new URLSearchParams({ next: nextPath }).toString()}`;
+  };
+
+  const scheduleRedirect = (targetPath: string = getPostAuthRedirectPath()) => {
     clearTimer(redirectTimerRef);
     redirectTimerRef.current = setTimeout(() => {
-      window.location.href = "/";
+      window.location.href = targetPath;
     }, REDIRECT_DELAY_MS);
   };
 
@@ -85,6 +126,13 @@ export default function AuthGatewayPage() {
     let cancelled = false;
 
     const checkLoginState = async () => {
+      const query = getSearchParams();
+      const nextPath = getPostAuthRedirectPath();
+      const supportsPasskeysNow = browserSupportsPasskeys();
+      const shouldOfferPasskeySetup = supportsPasskeysNow && query.get("offer_passkey_setup") === "1";
+      const queryFlow = query.get("flow") === "register" ? "register" : "login";
+      const provider = query.get("provider") === "google" ? "google" : "email";
+
       try {
         const response = await fetch("/api/current_user", {
           credentials: "same-origin"
@@ -92,7 +140,18 @@ export default function AuthGatewayPage() {
         const data = await response.json();
 
         if (!cancelled && data.logged_in) {
-          window.location.href = "/";
+          if (shouldOfferPasskeySetup) {
+            setEmailAuthFlow(queryFlow);
+            setPasskeySetupProvider(provider);
+            setStep("passkey");
+            showModalMessage(
+              provider === "google"
+                ? "Googleでログインしました。必要ならこのままPasskeyを追加できます。"
+                : "アカウントを作成しました。必要ならこのままPasskeyを追加できます。"
+            );
+            return;
+          }
+          window.location.href = nextPath;
         }
       } catch (error) {
         console.error("Error checking login state:", error);
@@ -112,6 +171,8 @@ export default function AuthGatewayPage() {
   const handleSendCode = async () => {
     const trimmedEmail = email.trim();
     setErrorMessage("");
+    setEmailAuthFlow(null);
+    setPasskeySetupProvider(null);
 
     if (!trimmedEmail) {
       setErrorMessage("メールアドレスを入力してください。");
@@ -160,11 +221,19 @@ export default function AuthGatewayPage() {
       const data = await response.json().catch(() => ({}));
 
       if (data.status === "success") {
-        if (supportsPasskeys) {
+        const flow = data.flow === "register" ? "register" : "login";
+        const shouldOfferPasskeySetup = flow === "register" && supportsPasskeys && data.offer_passkey_setup === true;
+        setEmailAuthFlow(flow);
+        setPasskeySetupProvider("email");
+
+        if (shouldOfferPasskeySetup) {
           setStep("passkey");
-          showModalMessage("認証が完了しました。次回から1タップで入れるようにできます。");
+          showModalMessage("アカウントを作成しました。必要ならこのままPasskeyを追加できます。");
         } else {
-          scheduleRedirectHome();
+          if (flow === "register") {
+            showModalMessage("アカウントを作成しました。");
+          }
+          scheduleRedirect();
         }
       } else {
         setErrorMessage(typeof data.error === "string" ? data.error : "認証に失敗しました。");
@@ -182,8 +251,11 @@ export default function AuthGatewayPage() {
     setPasskeyPending(true);
     try {
       await authenticateWithPasskey();
-      window.location.href = "/";
+      window.location.href = getPostAuthRedirectPath();
     } catch (error) {
+      if (error instanceof PasskeyCancelledError) {
+        return;
+      }
       setErrorMessage(error instanceof Error ? error.message : "Passkey認証に失敗しました。");
     } finally {
       setPasskeyPending(false);
@@ -196,8 +268,11 @@ export default function AuthGatewayPage() {
     try {
       await registerPasskey();
       showModalMessage("Passkeyを保存しました。");
-      scheduleRedirectHome();
+      scheduleRedirect();
     } catch (error) {
+      if (error instanceof PasskeyCancelledError) {
+        return;
+      }
       setErrorMessage(error instanceof Error ? error.message : "Passkey登録に失敗しました。");
     } finally {
       setPasskeyPending(false);
@@ -254,7 +329,7 @@ export default function AuthGatewayPage() {
                   className="google-btn"
                   id="googleAuthBtn"
                   onClick={() => {
-                    window.location.href = "/google-login";
+                    window.location.href = buildGoogleLoginUrl();
                   }}
                 >
                   <svg
@@ -353,7 +428,13 @@ export default function AuthGatewayPage() {
           {step === "passkey" ? (
             <div className="passkey-panel">
               <p className="step-caption">
-                この端末にPasskeyを保存すると、次回からメールコードなしで入れます。
+                {emailAuthFlow === "register"
+                  ? (
+                    passkeySetupProvider === "google"
+                      ? "Googleログインは完了しています。必要ならこの端末にPasskeyを追加してください。"
+                      : "アカウント作成は完了しています。必要ならこの端末にPasskeyを追加してください。"
+                  )
+                  : "この端末にPasskeyを保存すると、次回からメールコードなしで入れます。"}
               </p>
               <button
                 type="button"
@@ -366,7 +447,7 @@ export default function AuthGatewayPage() {
               <button
                 type="button"
                 className="ghost-btn"
-                onClick={scheduleRedirectHome}
+                onClick={() => scheduleRedirect()}
               >
                 後で設定する
               </button>

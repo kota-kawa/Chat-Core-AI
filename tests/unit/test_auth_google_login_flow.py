@@ -27,23 +27,25 @@ async def immediate_run_blocking(func, *args, **kwargs):
     return func(*args, **kwargs)
 
 
-def make_request():
+def make_request(*, query_string=b"code=abc&state=google-state", session=None):
     return build_request(
         method="GET",
         path="/google-callback",
-        query_string=b"code=abc&state=google-state",
-        session={
+        query_string=query_string,
+        session=session
+        or {
             "google_oauth_state": "google-state",
             "google_redirect_uri": "https://chatcore-ai.com/google-callback",
         },
     )
 
 
-def make_google_login_request():
+def make_google_login_request(*, query_string=b"", session=None):
     return build_request(
         method="GET",
         path="/google-login",
-        session={},
+        query_string=query_string,
+        session=session or {},
         scheme="https",
         host_header="chatcore-ai.com",
         server_host="chatcore-ai.com",
@@ -164,8 +166,39 @@ class GoogleLoginFlowTestCase(unittest.TestCase):
         payload = json.loads(response.body.decode("utf-8"))
         self.assertEqual(payload["error"], GOOGLE_LOGIN_UNAVAILABLE_ERROR)
 
+    def test_google_login_stores_sanitized_next_path_in_session(self):
+        request = make_google_login_request(query_string=b"next=%2Fmemo%3Ftab%3Drecent")
+        fake_flow = Mock()
+        fake_flow.authorization_url.return_value = ("https://accounts.google.com/o/oauth2/auth?state=google-state", "google-state")
+        fake_flow_class = Mock()
+        fake_flow_class.from_client_config.return_value = fake_flow
+
+        with patch("blueprints.auth.Flow", fake_flow_class):
+            with patch(
+                "blueprints.auth._google_client_config",
+                side_effect=valid_google_client_config,
+            ):
+                with patch(
+                    "blueprints.auth.url_for",
+                    return_value="https://chatcore-ai.com/google-callback",
+                ):
+                    response = asyncio.run(google_login(request))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.headers["location"],
+            "https://accounts.google.com/o/oauth2/auth?state=google-state",
+        )
+        self.assertEqual(request.session["google_login_next_path"], "/memo?tab=recent")
+
     def test_google_callback_redirects_to_login_when_token_exchange_fails(self):
-        request = make_request()
+        request = make_request(
+            session={
+                "google_oauth_state": "google-state",
+                "google_redirect_uri": "https://chatcore-ai.com/google-callback",
+                "google_login_next_path": "/memo",
+            }
+        )
         fake_flow = FakeFlow()
         fake_flow.fetch_token = Mock(side_effect=ValueError("invalid_grant"))
         fake_flow_class = Mock()
@@ -180,9 +213,10 @@ class GoogleLoginFlowTestCase(unittest.TestCase):
                     response = asyncio.run(google_callback(request))
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.headers["location"], "https://chatcore-ai.com/login")
+        self.assertEqual(response.headers["location"], "https://chatcore-ai.com/login?next=%2Fmemo")
         self.assertNotIn("google_oauth_state", request.session)
         self.assertNotIn("google_redirect_uri", request.session)
+        self.assertNotIn("google_login_next_path", request.session)
 
     def test_google_callback_redirects_to_login_when_userinfo_fetch_fails(self):
         request = make_request()
@@ -255,12 +289,16 @@ class GoogleLoginFlowTestCase(unittest.TestCase):
                                                             )
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.headers["location"], "https://chatcore-ai.com/?auth=success")
+        self.assertEqual(
+            response.headers["location"],
+            "https://chatcore-ai.com/login?flow=register&offer_passkey_setup=1&provider=google",
+        )
         mock_frontend_url.assert_not_called()
         self.assertEqual(request.session["user_id"], 42)
         self.assertEqual(request.session["user_email"], "user@example.com")
         self.assertNotIn("google_oauth_state", request.session)
         self.assertNotIn("google_redirect_uri", request.session)
+        self.assertNotIn("google_login_next_path", request.session)
         self.assertEqual(
             fake_flow.authorization_responses,
             ["https://chatcore-ai.com/google-callback?code=abc&state=google-state"],
@@ -341,7 +379,10 @@ class GoogleLoginFlowTestCase(unittest.TestCase):
                                                         )
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.headers["location"], "https://chatcore-ai.com/?auth=success")
+        self.assertEqual(
+            response.headers["location"],
+            "https://chatcore-ai.com/login?flow=register&offer_passkey_setup=1&provider=google",
+        )
         self.assertEqual(request.session["user_id"], 7)
         mock_create.assert_not_called()
         mock_link.assert_called_once_with(7, "google-user-123", "user@example.com")
@@ -354,7 +395,13 @@ class GoogleLoginFlowTestCase(unittest.TestCase):
         mock_copy_tasks.assert_called_once_with(7)
 
     def test_google_callback_redirects_to_login_when_db_error_occurs(self):
-        request = make_request()
+        request = make_request(
+            session={
+                "google_oauth_state": "google-state",
+                "google_redirect_uri": "https://chatcore-ai.com/google-callback",
+                "google_login_next_path": "/memo",
+            }
+        )
         fake_flow = FakeFlow()
         fake_flow_class = Mock()
         fake_flow_class.from_client_config.return_value = fake_flow
@@ -382,11 +429,17 @@ class GoogleLoginFlowTestCase(unittest.TestCase):
                             response = asyncio.run(google_callback(request))
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.headers["location"], "https://chatcore-ai.com/login")
+        self.assertEqual(response.headers["location"], "https://chatcore-ai.com/login?next=%2Fmemo")
         self.assertNotIn("user_id", request.session)
 
     def test_google_callback_redirects_to_login_when_create_user_returns_none(self):
-        request = make_request()
+        request = make_request(
+            session={
+                "google_oauth_state": "google-state",
+                "google_redirect_uri": "https://chatcore-ai.com/google-callback",
+                "google_login_next_path": "/memo",
+            }
+        )
         fake_flow = FakeFlow()
         fake_flow_class = Mock()
         fake_flow_class.from_client_config.return_value = fake_flow
@@ -413,11 +466,17 @@ class GoogleLoginFlowTestCase(unittest.TestCase):
                                     response = asyncio.run(google_callback(request))
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.headers["location"], "https://chatcore-ai.com/login")
+        self.assertEqual(response.headers["location"], "https://chatcore-ai.com/login?next=%2Fmemo")
         self.assertNotIn("user_id", request.session)
 
     def test_rejects_google_login_when_email_is_not_verified(self):
-        request = make_request()
+        request = make_request(
+            session={
+                "google_oauth_state": "google-state",
+                "google_redirect_uri": "https://chatcore-ai.com/google-callback",
+                "google_login_next_path": "/memo",
+            }
+        )
         fake_flow = FakeFlow()
         fake_flow_class = Mock()
         fake_flow_class.from_client_config.return_value = fake_flow
@@ -440,9 +499,53 @@ class GoogleLoginFlowTestCase(unittest.TestCase):
                             response = asyncio.run(google_callback(request))
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.headers["location"], "https://chatcore-ai.com/login")
+        self.assertEqual(response.headers["location"], "https://chatcore-ai.com/login?next=%2Fmemo")
         mock_create.assert_not_called()
         self.assertNotIn("user_id", request.session)
+
+    def test_new_google_user_onboarding_preserves_next_path(self):
+        request = make_request(
+            session={
+                "google_oauth_state": "google-state",
+                "google_redirect_uri": "https://chatcore-ai.com/google-callback",
+                "google_login_next_path": "/memo?tab=recent",
+            }
+        )
+        fake_flow = FakeFlow()
+        fake_flow_class = Mock()
+        fake_flow_class.from_client_config.return_value = fake_flow
+
+        with patch("blueprints.auth.Flow", fake_flow_class):
+            with patch(
+                "blueprints.auth._google_client_config",
+                side_effect=valid_google_client_config,
+            ):
+                with patch("blueprints.auth.run_blocking", new=immediate_run_blocking):
+                    with patch(
+                        "blueprints.auth._fetch_google_user_info",
+                        return_value={
+                            "id": "google-user-123",
+                            "email": "user@example.com",
+                            "verified_email": True,
+                            "name": "Alice Example",
+                        },
+                    ):
+                        with patch("blueprints.auth.get_user_by_google_id", return_value=None):
+                            with patch("blueprints.auth.get_user_by_email", return_value=None):
+                                with patch("blueprints.auth.create_user", return_value=42):
+                                    with patch("blueprints.auth.update_user_profile_from_google_if_unset"):
+                                        with patch("blueprints.auth.copy_default_tasks_for_user"):
+                                            with patch(
+                                                "blueprints.auth.get_user_by_id",
+                                                return_value={"id": 42, "email": "user@example.com"},
+                                            ):
+                                                response = asyncio.run(google_callback(request))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.headers["location"],
+            "https://chatcore-ai.com/login?flow=register&offer_passkey_setup=1&provider=google&next=%2Fmemo%3Ftab%3Drecent",
+        )
 
     def test_handles_oidc_compliant_userinfo_fields(self):
         # sub や email_verified が使用されている場合でも正しく動作することを確認
