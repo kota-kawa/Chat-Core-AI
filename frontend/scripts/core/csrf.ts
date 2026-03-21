@@ -38,6 +38,50 @@ const getCsrfToken = async (originalFetch: typeof window.fetch): Promise<string>
   return csrfTokenPromise;
 };
 
+const invalidateCsrfToken = (): void => {
+  csrfTokenPromise = null;
+};
+
+const isCsrfFailureResponse = async (response: Response): Promise<boolean> => {
+  if (response.status !== 403) return false;
+
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    return false;
+  }
+
+  try {
+    const payload = (await response.clone().json()) as { detail?: unknown };
+    const detail = typeof payload?.detail === "string" ? payload.detail : "";
+    return detail.startsWith("CSRF token");
+  } catch {
+    return false;
+  }
+};
+
+const buildRequestWithCsrf = async (
+  request: Request,
+  originalFetch: typeof window.fetch,
+  options: { forceRefreshToken?: boolean } = {}
+): Promise<Request> => {
+  const headers = new Headers(request.headers);
+  if (options.forceRefreshToken) {
+    invalidateCsrfToken();
+  }
+
+  if (!headers.has("X-CSRF-Token")) {
+    const token = await getCsrfToken(originalFetch);
+    if (token) {
+      headers.set("X-CSRF-Token", token);
+    }
+  }
+
+  return new Request(request, {
+    headers,
+    credentials: request.credentials || "same-origin"
+  });
+};
+
 export function ensureCsrfProtection(): void {
   if (typeof window === "undefined" || csrfProtectionInitialized) {
     return;
@@ -46,29 +90,31 @@ export function ensureCsrfProtection(): void {
   const originalFetch = window.fetch.bind(window);
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const requestUrl = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-    const method = (init?.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
+    const createBaseRequest = () => new Request(input, init);
+    const baseRequest = createBaseRequest();
+    const requestUrl = baseRequest.url;
+    const method = baseRequest.method.toUpperCase();
 
     if (!UNSAFE_METHODS.has(method) || !isSameOrigin(requestUrl)) {
       return originalFetch(input, init);
     }
 
-    const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
-    if (!headers.has("X-CSRF-Token")) {
-      const token = await getCsrfToken(originalFetch);
-      if (token) {
-        headers.set("X-CSRF-Token", token);
-      }
+    let requestWithCsrf = await buildRequestWithCsrf(createBaseRequest(), originalFetch);
+    let response = await originalFetch(requestWithCsrf);
+
+    if (await isCsrfFailureResponse(response)) {
+      requestWithCsrf = await buildRequestWithCsrf(createBaseRequest(), originalFetch, {
+        forceRefreshToken: true
+      });
+      response = await originalFetch(requestWithCsrf);
     }
 
-    return originalFetch(input, {
-      ...init,
-      headers,
-      credentials: init?.credentials || (input instanceof Request ? input.credentials : "same-origin")
-    });
+    return response;
   };
 
   csrfProtectionInitialized = true;
 }
+
+ensureCsrfProtection();
 
 export {};
