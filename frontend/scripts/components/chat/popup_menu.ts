@@ -68,7 +68,7 @@ chatTemplate.innerHTML = `
     .btn--menu {
       width: 60px;
       height: 60px;
-      background: linear-gradient(135deg, #56ab2f, #a8e063);
+      background: linear-gradient(135deg, #1a73e8, #19c37d, #d97706);
       z-index: 1;
     }
     .btn--menu:after,
