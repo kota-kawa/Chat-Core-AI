@@ -74,15 +74,24 @@ from services.web import (
 from services.auth_limits import consume_auth_email_send_limits
 from services.request_models import AuthCodeRequest, EmailRequest
 from services.async_utils import run_blocking
+from services.auth_session import establish_authenticated_session
 from services.csrf import require_csrf
 from services.passkeys import (
+    PASSKEY_CHALLENGE_TTL_SECONDS,
+    clear_passkey_session,
     create_passkey,
+    get_credential_lookup_id,
+    get_passkey_authentication_ceremony,
     delete_passkey,
+    get_passkey_registration_ceremony,
     get_passkey_by_credential_id,
+    passkey_ceremony_is_expired,
     get_passkey_origins,
     get_passkey_rp_id,
     get_passkey_rp_name,
     list_passkeys_for_user,
+    store_passkey_authentication_ceremony,
+    store_passkey_registration_ceremony,
     update_passkey_usage,
 )
 from services.users import (
@@ -100,7 +109,6 @@ from services.email_service import send_email
 from services.llm_daily_limit import consume_auth_email_daily_quota
 from services.runtime_config import is_production_env
 from services.security import constant_time_compare, generate_verification_code
-from services.session_middleware import rotate_session_identifier
 from blueprints.verification import (
     api_send_verification_email,
     api_verify_registration_code,
@@ -185,17 +193,18 @@ def _google_login_unavailable_response() -> Any:
 def _passkey_unavailable_response() -> Any:
     return jsonify({"status": "fail", "error": PASSKEY_UNAVAILABLE_ERROR}, status_code=503)
 
-
-def _clear_passkey_session(session: dict[str, Any]) -> None:
-    session.pop("passkey_registration_challenge", None)
-    session.pop("passkey_authentication_challenge", None)
-
-
 def _user_id_from_session(session: dict[str, Any]) -> int | None:
     user_id = session.get("user_id")
     if isinstance(user_id, int):
         return user_id
     return None
+
+
+async def _copy_default_tasks_after_login(user_id: int, *, context: str) -> None:
+    try:
+        await run_blocking(copy_default_tasks_for_user, user_id)
+    except Exception:
+        logger.exception("%s: failed to copy default tasks for user %s", context, user_id)
 
 
 def _build_absolute_url_from_reference(reference_url: str, path: str) -> str | None:
@@ -354,7 +363,7 @@ async def api_current_user(request: Request):
         session.pop("login_verification_code_issued_at", None)
         session.pop("login_verification_code_attempts", None)
         _clear_google_oauth_session(session)
-        _clear_passkey_session(session)
+        clear_passkey_session(session)
         set_session_permanent(session, False)
         return jsonify({"logged_in": False})
     else:
@@ -487,7 +496,10 @@ async def api_passkey_register_options(request: Request):
             PublicKeyCredentialHint.HYBRID,
         ],
     )
-    request.session["passkey_registration_challenge"] = bytes_to_base64url(options.challenge)
+    store_passkey_registration_ceremony(
+        request.session,
+        bytes_to_base64url(options.challenge),
+    )
     return jsonify(json.loads(options_to_json(options)))
 
 
@@ -504,9 +516,21 @@ async def api_passkey_register_verify(request: Request):
     if user_id is None:
         return jsonify({"status": "fail", "error": "ログインが必要です"}, status_code=401)
 
-    challenge = request.session.get("passkey_registration_challenge")
-    if not isinstance(challenge, str) or not challenge:
+    ceremony = get_passkey_registration_ceremony(request.session)
+    if ceremony is None:
         return jsonify({"status": "fail", "error": "Passkey登録を最初からやり直してください"}, status_code=400)
+    if passkey_ceremony_is_expired(ceremony):
+        clear_passkey_session(request.session)
+        return jsonify(
+            {
+                "status": "fail",
+                "error": (
+                    f"Passkey登録の有効期限が切れています。"
+                    f"{PASSKEY_CHALLENGE_TTL_SECONDS // 60}分以内に再試行してください"
+                ),
+            },
+            status_code=400,
+        )
 
     data, error_response = await require_json_dict(request, status="fail")
     if error_response is not None:
@@ -520,7 +544,7 @@ async def api_passkey_register_verify(request: Request):
     try:
         verified = verify_registration_response(
             credential=credential,
-            expected_challenge=base64url_to_bytes(challenge),
+            expected_challenge=base64url_to_bytes(ceremony["challenge"]),
             expected_rp_id=get_passkey_rp_id(request),
             expected_origin=get_passkey_origins(request),
             require_user_verification=True,
@@ -538,10 +562,10 @@ async def api_passkey_register_verify(request: Request):
         )
     except Exception:
         logger.exception("Passkey registration verification failed for user %s", user_id)
-        _clear_passkey_session(request.session)
+        clear_passkey_session(request.session)
         return jsonify({"status": "fail", "error": "Passkeyの登録に失敗しました"}, status_code=400)
 
-    _clear_passkey_session(request.session)
+    clear_passkey_session(request.session)
     return jsonify({"status": "success", "passkey": passkey})
 
 
@@ -559,7 +583,10 @@ async def api_passkey_authenticate_options(request: Request):
         rp_id=get_passkey_rp_id(request),
         user_verification=UserVerificationRequirement.REQUIRED,
     )
-    request.session["passkey_authentication_challenge"] = bytes_to_base64url(options.challenge)
+    store_passkey_authentication_ceremony(
+        request.session,
+        bytes_to_base64url(options.challenge),
+    )
     return jsonify(json.loads(options_to_json(options)))
 
 
@@ -571,9 +598,21 @@ async def api_passkey_authenticate_verify(request: Request):
     ):
         return _passkey_unavailable_response()
 
-    challenge = request.session.get("passkey_authentication_challenge")
-    if not isinstance(challenge, str) or not challenge:
+    ceremony = get_passkey_authentication_ceremony(request.session)
+    if ceremony is None:
         return jsonify({"status": "fail", "error": "Passkey認証を最初からやり直してください"}, status_code=400)
+    if passkey_ceremony_is_expired(ceremony):
+        clear_passkey_session(request.session)
+        return jsonify(
+            {
+                "status": "fail",
+                "error": (
+                    f"Passkey認証の有効期限が切れています。"
+                    f"{PASSKEY_CHALLENGE_TTL_SECONDS // 60}分以内に再試行してください"
+                ),
+            },
+            status_code=400,
+        )
 
     data, error_response = await require_json_dict(request, status="fail")
     if error_response is not None:
@@ -583,19 +622,19 @@ async def api_passkey_authenticate_verify(request: Request):
     if not isinstance(credential, dict):
         return jsonify({"status": "fail", "error": "Passkeyの応答が不正です"}, status_code=400)
 
-    credential_id = credential.get("id")
+    credential_id = get_credential_lookup_id(credential)
     if not isinstance(credential_id, str) or not credential_id:
         return jsonify({"status": "fail", "error": "PasskeyのIDが不正です"}, status_code=400)
 
     passkey = await run_blocking(get_passkey_by_credential_id, credential_id)
     if not passkey:
-        _clear_passkey_session(request.session)
-        return jsonify({"status": "fail", "error": "Passkeyが見つかりません"}, status_code=404)
+        clear_passkey_session(request.session)
+        return jsonify({"status": "fail", "error": "Passkey認証に失敗しました"}, status_code=400)
 
     try:
         verified = verify_authentication_response(
             credential=credential,
-            expected_challenge=base64url_to_bytes(challenge),
+            expected_challenge=base64url_to_bytes(ceremony["challenge"]),
             expected_rp_id=get_passkey_rp_id(request),
             expected_origin=get_passkey_origins(request),
             credential_public_key=base64url_to_bytes(passkey["public_key"]),
@@ -604,28 +643,34 @@ async def api_passkey_authenticate_verify(request: Request):
         )
     except Exception:
         logger.exception("Passkey authentication verification failed.")
-        _clear_passkey_session(request.session)
+        clear_passkey_session(request.session)
         return jsonify({"status": "fail", "error": "Passkey認証に失敗しました"}, status_code=400)
 
     user = await run_blocking(get_user_by_id, passkey["user_id"])
     if not user or not user.get("is_verified"):
-        _clear_passkey_session(request.session)
+        clear_passkey_session(request.session)
         return jsonify({"status": "fail", "error": "ユーザーが存在しないか、認証されていません"}, status_code=400)
 
-    rotate_session_identifier(request)
-    request.session["user_id"] = passkey["user_id"]
-    request.session["user_email"] = user["email"]
-    set_session_permanent(request.session, True)
-    _clear_passkey_session(request.session)
+    establish_authenticated_session(request, int(passkey["user_id"]), user["email"])
+    clear_passkey_session(request.session)
 
-    await run_blocking(
-        update_passkey_usage,
-        int(passkey["id"]),
-        int(verified.new_sign_count),
-        credential_backed_up=bool(verified.credential_backed_up),
-        credential_device_type=str(verified.credential_device_type.value),
+    try:
+        await run_blocking(
+            update_passkey_usage,
+            int(passkey["id"]),
+            int(verified.new_sign_count),
+            credential_backed_up=bool(verified.credential_backed_up),
+            credential_device_type=str(verified.credential_device_type.value),
+        )
+    except Exception:
+        logger.exception(
+            "Passkey authentication: failed to update credential usage for passkey %s",
+            passkey["id"],
+        )
+    await _copy_default_tasks_after_login(
+        int(passkey["user_id"]),
+        context="Passkey authentication",
     )
-    await run_blocking(copy_default_tasks_for_user, passkey["user_id"])
 
     return jsonify({"status": "success", "message": "Passkeyでログインしました"})
 
@@ -853,10 +898,7 @@ async def google_callback(request: Request):
 
     # セッション確立（最優先：以降の補助処理が失敗してもログインは成立させる）
     # Establish session first — non-critical helpers must not block login.
-    rotate_session_identifier(request)
-    session["user_id"] = user_id
-    session["user_email"] = email
-    set_session_permanent(session, True)
+    establish_authenticated_session(request, int(user_id), email)
 
     # 補助処理（失敗してもログイン自体には影響させない）
     # Auxiliary operations — failures are logged but do not block login.
@@ -876,10 +918,7 @@ async def google_callback(request: Request):
         except Exception:
             logger.exception("Google OAuth callback: failed to verify user %s", user_id)
 
-    try:
-        await run_blocking(copy_default_tasks_for_user, user_id)
-    except Exception:
-        logger.exception("Google OAuth callback: failed to copy default tasks for user %s", user_id)
+    await _copy_default_tasks_after_login(user_id, context="Google OAuth callback")
 
     try:
         persisted_user = await run_blocking(get_user_by_id, user_id)
@@ -1012,12 +1051,9 @@ async def api_verify_login_code(request: Request):
                 {"status": "fail", "error": "ユーザーが存在しないか、認証されていません"},
                 status_code=400,
             )
-        rotate_session_identifier(request)
-        session["user_id"] = user_id
-        session["user_email"] = user["email"] if user else ""
-        set_session_permanent(session, True)
+        establish_authenticated_session(request, int(user_id), user["email"] if user else "")
         _clear_login_verification_session(session)
-        await run_blocking(copy_default_tasks_for_user, user_id)
+        await _copy_default_tasks_after_login(int(user_id), context="Email login verification")
         return jsonify({"status": "success", "message": "ログインに成功しました"})
     else:
         attempts += 1

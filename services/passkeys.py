@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import secrets
+import time
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -10,6 +12,9 @@ from .db import get_db_connection
 from .web import FRONTEND_URL
 
 DEFAULT_PASSKEY_RP_NAME = "Chat Core"
+PASSKEY_CHALLENGE_TTL_SECONDS = 300
+PASSKEY_REGISTRATION_SESSION_KEY = "passkey_registration"
+PASSKEY_AUTHENTICATION_SESSION_KEY = "passkey_authentication"
 
 
 def get_passkey_rp_name() -> str:
@@ -50,6 +55,95 @@ def get_passkey_origins(request: Request) -> list[str]:
         if origin not in origins:
             origins.append(origin)
     return origins or ["http://localhost:3000"]
+
+
+def clear_passkey_session(session: dict[str, Any]) -> None:
+    session.pop(PASSKEY_REGISTRATION_SESSION_KEY, None)
+    session.pop(PASSKEY_AUTHENTICATION_SESSION_KEY, None)
+
+
+def store_passkey_registration_ceremony(
+    session: dict[str, Any], challenge: str
+) -> dict[str, Any]:
+    return _store_passkey_ceremony(session, PASSKEY_REGISTRATION_SESSION_KEY, challenge)
+
+
+def store_passkey_authentication_ceremony(
+    session: dict[str, Any], challenge: str
+) -> dict[str, Any]:
+    return _store_passkey_ceremony(session, PASSKEY_AUTHENTICATION_SESSION_KEY, challenge)
+
+
+def get_passkey_registration_ceremony(session: dict[str, Any]) -> dict[str, Any] | None:
+    return _load_passkey_ceremony(session.get(PASSKEY_REGISTRATION_SESSION_KEY))
+
+
+def get_passkey_authentication_ceremony(session: dict[str, Any]) -> dict[str, Any] | None:
+    return _load_passkey_ceremony(session.get(PASSKEY_AUTHENTICATION_SESSION_KEY))
+
+
+def passkey_ceremony_is_expired(
+    ceremony: dict[str, Any], *, now: int | None = None
+) -> bool:
+    issued_at = int(ceremony.get("issued_at") or 0)
+    if issued_at <= 0:
+        return True
+
+    current_time = int(time.time()) if now is None else int(now)
+    return current_time - issued_at > PASSKEY_CHALLENGE_TTL_SECONDS
+
+
+def get_credential_lookup_id(credential: dict[str, Any]) -> str | None:
+    raw_id = credential.get("rawId")
+    if isinstance(raw_id, str) and raw_id:
+        return raw_id
+
+    credential_id = credential.get("id")
+    if isinstance(credential_id, str) and credential_id:
+        return credential_id
+
+    return None
+
+
+def _store_passkey_ceremony(
+    session: dict[str, Any], session_key: str, challenge: str
+) -> dict[str, Any]:
+    clear_passkey_session(session)
+    ceremony = {
+        "challenge": challenge,
+        "issued_at": int(time.time()),
+        "ceremony_id": secrets.token_urlsafe(16),
+    }
+    session[session_key] = ceremony
+    return ceremony
+
+
+def _load_passkey_ceremony(raw_state: Any) -> dict[str, Any] | None:
+    if not isinstance(raw_state, dict):
+        return None
+
+    challenge = raw_state.get("challenge")
+    ceremony_id = raw_state.get("ceremony_id")
+    issued_at = raw_state.get("issued_at")
+
+    if not isinstance(challenge, str) or not challenge:
+        return None
+    if not isinstance(ceremony_id, str) or not ceremony_id:
+        return None
+
+    try:
+        normalized_issued_at = int(issued_at)
+    except (TypeError, ValueError):
+        return None
+
+    if normalized_issued_at <= 0:
+        return None
+
+    return {
+        "challenge": challenge,
+        "issued_at": normalized_issued_at,
+        "ceremony_id": ceremony_id,
+    }
 
 
 def list_passkeys_for_user(user_id: int) -> list[dict[str, Any]]:

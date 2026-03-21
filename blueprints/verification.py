@@ -5,12 +5,12 @@ from fastapi import APIRouter, Depends, Request
 
 from services.async_utils import run_blocking
 from services.auth_limits import consume_auth_email_send_limits
+from services.auth_session import establish_authenticated_session
 from services.csrf import require_csrf
 from services.email_service import send_email
 from services.llm_daily_limit import consume_auth_email_daily_quota
 from services.request_models import AuthCodeRequest, EmailRequest
 from services.security import constant_time_compare, generate_verification_code
-from services.session_middleware import rotate_session_identifier
 from services.users import (
     create_user,
     get_user_by_email,
@@ -23,7 +23,6 @@ from services.web import (
     log_and_internal_server_error,
     require_json_dict,
     validate_payload_model,
-    set_session_permanent,
 )
 
 verification_bp = APIRouter(dependencies=[Depends(require_csrf)])
@@ -181,10 +180,7 @@ async def api_verify_registration_code(request: Request):
 
     # ログイン状態にセット
     # Set authenticated session fields.
-    rotate_session_identifier(request)
-    session["user_id"] = user_id
-    session["user_email"] = user["email"]
-    set_session_permanent(session, True)
+    establish_authenticated_session(request, int(user_id), user["email"])
 
     # 一時セッション情報のクリア
     # Clear temporary verification session data.

@@ -191,6 +191,31 @@ class VerificationCodeLimitsTestCase(unittest.TestCase):
         self.assertNotIn("login_verification_code", session)
         self.assertNotIn("login_temp_user_id", session)
 
+    def test_verify_login_code_keeps_success_when_copy_default_tasks_fails(self):
+        session = {
+            "login_verification_code": "222222",
+            "login_temp_user_id": 12,
+            "login_verification_code_issued_at": 1000,
+            "login_verification_code_attempts": 0,
+        }
+        request = make_request("/api/verify_login_code", {"authCode": "222222"}, session=session)
+
+        with patch("blueprints.auth.time.time", return_value=1001):
+            with patch(
+                "blueprints.auth.get_user_by_id",
+                return_value={"id": 12, "email": "user@example.com", "is_verified": True},
+            ):
+                with patch(
+                    "blueprints.auth.copy_default_tasks_for_user",
+                    side_effect=RuntimeError("task copy failed"),
+                ):
+                    response = asyncio.run(api_verify_login_code(request))
+
+        payload = json.loads(response.body.decode("utf-8"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["status"], "success")
+        self.assertEqual(session["user_id"], 12)
+
     def test_verify_registration_code_sets_permanent_and_rotates_session(self):
         session = {
             "verification_code": "111111",

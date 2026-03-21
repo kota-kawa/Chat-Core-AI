@@ -122,11 +122,88 @@ class PasskeyRouteTestCase(unittest.TestCase):
 
         payload = json.loads(response.body.decode())
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(session["passkey_registration_challenge"], "challenge-token")
+        self.assertEqual(session["passkey_registration"]["challenge"], "challenge-token")
+        self.assertIn("issued_at", session["passkey_registration"])
+        self.assertIn("ceremony_id", session["passkey_registration"])
         self.assertEqual(payload["challenge"], "challenge-token")
 
     def test_passkey_authentication_verify_logs_user_in(self):
-        session = {"passkey_authentication_challenge": "challenge-token"}
+        session = {
+            "passkey_authentication": {
+                "challenge": "challenge-token",
+                "issued_at": 1000,
+                "ceremony_id": "ceremony-1",
+            }
+        }
+        request = make_request(
+            "/api/passkeys/authenticate/verify",
+            json_body={"credential": {"id": "cred-1", "rawId": "cred-raw-1", "response": {}}},
+            session=session,
+        )
+        verified = SimpleNamespace(
+            new_sign_count=11,
+            credential_backed_up=False,
+            credential_device_type=SimpleNamespace(value="single_device"),
+        )
+
+        with patch(
+            "blueprints.auth.get_passkey_by_credential_id",
+            return_value={
+                "id": 4,
+                "user_id": 7,
+                "public_key": "public-key",
+                "sign_count": 5,
+            },
+        ) as mock_get_passkey:
+            with patch("blueprints.auth.base64url_to_bytes", side_effect=lambda value: str(value).encode("utf-8")):
+                with patch("blueprints.auth.verify_authentication_response", return_value=verified):
+                    with patch(
+                        "blueprints.auth.get_user_by_id",
+                        return_value={"id": 7, "email": "user@example.com", "is_verified": True},
+                    ):
+                        with patch("blueprints.auth.update_passkey_usage"):
+                            with patch("blueprints.auth.copy_default_tasks_for_user"):
+                                with patch("blueprints.auth.time.time", return_value=1001):
+                                    response = asyncio.run(api_passkey_authenticate_verify(request))
+
+        payload = json.loads(response.body.decode())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["status"], "success")
+        self.assertEqual(session["user_id"], 7)
+        self.assertEqual(session["user_email"], "user@example.com")
+        mock_get_passkey.assert_called_once_with("cred-raw-1")
+        self.assertNotIn("passkey_authentication", session)
+
+    def test_passkey_authentication_verify_rejects_expired_ceremony(self):
+        session = {
+            "passkey_authentication": {
+                "challenge": "challenge-token",
+                "issued_at": 1000,
+                "ceremony_id": "ceremony-1",
+            }
+        }
+        request = make_request(
+            "/api/passkeys/authenticate/verify",
+            json_body={"credential": {"id": "cred-1", "rawId": "cred-1", "response": {}}},
+            session=session,
+        )
+
+        with patch("blueprints.auth.time.time", return_value=1400):
+            response = asyncio.run(api_passkey_authenticate_verify(request))
+
+        payload = json.loads(response.body.decode())
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("有効期限", payload["error"])
+        self.assertNotIn("passkey_authentication", session)
+
+    def test_passkey_authentication_verify_keeps_login_when_usage_update_fails(self):
+        session = {
+            "passkey_authentication": {
+                "challenge": "challenge-token",
+                "issued_at": 1000,
+                "ceremony_id": "ceremony-1",
+            }
+        }
         request = make_request(
             "/api/passkeys/authenticate/verify",
             json_body={"credential": {"id": "cred-1", "rawId": "cred-1", "response": {}}},
@@ -153,16 +230,15 @@ class PasskeyRouteTestCase(unittest.TestCase):
                         "blueprints.auth.get_user_by_id",
                         return_value={"id": 7, "email": "user@example.com", "is_verified": True},
                     ):
-                        with patch("blueprints.auth.update_passkey_usage"):
+                        with patch("blueprints.auth.update_passkey_usage", side_effect=RuntimeError("db error")):
                             with patch("blueprints.auth.copy_default_tasks_for_user"):
-                                response = asyncio.run(api_passkey_authenticate_verify(request))
+                                with patch("blueprints.auth.time.time", return_value=1001):
+                                    response = asyncio.run(api_passkey_authenticate_verify(request))
 
         payload = json.loads(response.body.decode())
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["status"], "success")
         self.assertEqual(session["user_id"], 7)
-        self.assertEqual(session["user_email"], "user@example.com")
-        self.assertNotIn("passkey_authentication_challenge", session)
 
 
 if __name__ == "__main__":
