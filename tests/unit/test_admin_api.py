@@ -32,12 +32,18 @@ class AdminApiTestCase(unittest.TestCase):
             method="POST",
             path="/admin/api/login",
             json_body={"password": password, "next": "/admin"},
+            session={},
         )
+        request.scope["session_id"] = "existing-admin-session"
         with patch.object(admin_views, "ADMIN_PASSWORD_HASH", hash_password(password)):
-            response = asyncio.run(admin_views.api_login(request))
+            with patch("blueprints.admin.views.consume_admin_login_limit", return_value=(True, None)):
+                response = asyncio.run(admin_views.api_login(request))
         self.assertEqual(response.status_code, 200)
         payload = json.loads(response.body.decode())
         self.assertEqual(payload["status"], "success")
+        self.assertTrue(request.session["is_admin"])
+        self.assertIsNone(request.scope["session_id"])
+        self.assertEqual(request.scope["_session_ids_to_delete"], {"existing-admin-session"})
 
 
     def test_login_rejects_external_next_url(self):
@@ -52,7 +58,8 @@ class AdminApiTestCase(unittest.TestCase):
                         path="/admin/api/login",
                         json_body={"password": password, "next": external_next},
                     )
-                    response = asyncio.run(admin_views.api_login(request))
+                    with patch("blueprints.admin.views.consume_admin_login_limit", return_value=(True, None)):
+                        response = asyncio.run(admin_views.api_login(request))
                     payload = json.loads(response.body.decode())
                     self.assertEqual(response.status_code, 200)
                     self.assertEqual(payload["status"], "success")
@@ -65,11 +72,27 @@ class AdminApiTestCase(unittest.TestCase):
             json_body={"password": "wrong-password", "next": "/admin"},
         )
         with patch.object(admin_views, "ADMIN_PASSWORD_HASH", hash_password("correct-password")):
-            response = asyncio.run(admin_views.api_login(request))
+            with patch("blueprints.admin.views.consume_admin_login_limit", return_value=(True, None)):
+                response = asyncio.run(admin_views.api_login(request))
 
         self.assertEqual(response.status_code, 401)
         payload = json.loads(response.body.decode())
         self.assertEqual(payload["status"], "fail")
+
+    def test_login_returns_429_when_rate_limited(self):
+        request = make_request(
+            method="POST",
+            path="/admin/api/login",
+            json_body={"password": "wrong-password", "next": "/admin"},
+        )
+
+        with patch("blueprints.admin.views.consume_admin_login_limit", return_value=(False, "too many attempts")):
+            response = asyncio.run(admin_views.api_login(request))
+
+        self.assertEqual(response.status_code, 429)
+        payload = json.loads(response.body.decode())
+        self.assertEqual(payload["status"], "fail")
+        self.assertEqual(payload["error"], "too many attempts")
 
     def test_dashboard_returns_tables(self):
         class DummyCursor:

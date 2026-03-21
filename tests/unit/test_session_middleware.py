@@ -4,8 +4,14 @@ from http.cookies import SimpleCookie
 from unittest.mock import patch
 
 from itsdangerous import URLSafeSerializer
+from starlette.datastructures import MutableHeaders
 
-from services.session_middleware import COOKIE_BACKEND, REDIS_BACKEND, PermanentSessionMiddleware
+from services.session_middleware import (
+    COOKIE_BACKEND,
+    REDIS_BACKEND,
+    SESSION_IDS_TO_DELETE_SCOPE_KEY,
+    PermanentSessionMiddleware,
+)
 
 
 class DummyRedis:
@@ -212,6 +218,26 @@ class RedisSessionMiddlewareTest(unittest.TestCase):
         cookie_header = header_values[0].lower()
         self.assertIn("samesite=none", cookie_header)
         self.assertIn("secure", cookie_header)
+
+    def test_commit_session_deletes_rotated_session_id(self):
+        dummy_redis = DummyRedis()
+        dummy_redis.set("session:old-session", '{"foo": "stale"}')
+        middleware = PermanentSessionMiddleware(lambda *_: None, secret_key="secret", max_age=60)
+        message = {"type": "http.response.start", "headers": []}
+        headers = MutableHeaders(scope=message)
+        scope = {
+            "session": {"foo": "fresh"},
+            "session_id": None,
+            SESSION_IDS_TO_DELETE_SCOPE_KEY: {"old-session"},
+        }
+
+        with patch("services.session_middleware.get_redis_client", return_value=dummy_redis):
+            middleware.inner._commit_session(scope, headers)
+
+        self.assertIsNone(dummy_redis.get("session:old-session"))
+        self.assertIsInstance(scope["session_id"], str)
+        self.assertNotEqual(scope["session_id"], "old-session")
+        self.assertIn('"foo": "fresh"', dummy_redis.get(f"session:{scope['session_id']}"))
 
 
 if __name__ == "__main__":

@@ -4,11 +4,13 @@ import time
 from fastapi import APIRouter, Depends, Request
 
 from services.async_utils import run_blocking
+from services.auth_limits import consume_auth_email_send_limits
 from services.csrf import require_csrf
 from services.email_service import send_email
 from services.llm_daily_limit import consume_auth_email_daily_quota
 from services.request_models import AuthCodeRequest, EmailRequest
 from services.security import constant_time_compare, generate_verification_code
+from services.session_middleware import rotate_session_identifier
 from services.users import (
     create_user,
     get_user_by_email,
@@ -21,6 +23,7 @@ from services.web import (
     log_and_internal_server_error,
     require_json_dict,
     validate_payload_model,
+    set_session_permanent,
 )
 
 verification_bp = APIRouter(dependencies=[Depends(require_csrf)])
@@ -28,6 +31,13 @@ logger = logging.getLogger(__name__)
 
 VERIFICATION_CODE_TTL_SECONDS = 300
 VERIFICATION_CODE_MAX_ATTEMPTS = 5
+
+
+def _clear_registration_verification_session(session: dict) -> None:
+    session.pop("verification_code", None)
+    session.pop("temp_user_id", None)
+    session.pop("verification_code_issued_at", None)
+    session.pop("verification_code_attempts", None)
 
 @verification_bp.post("/api/send_verification_email", name="verification.api_send_verification_email")
 async def api_send_verification_email(request: Request):
@@ -56,6 +66,9 @@ async def api_send_verification_email(request: Request):
         return validation_error
 
     email = payload.email
+    allowed, limit_error = consume_auth_email_send_limits(request, email)
+    if not allowed:
+        return jsonify({"status": "fail", "error": limit_error}, status_code=429)
 
     can_send_email, _, daily_limit = await run_blocking(consume_auth_email_daily_quota)
     if not can_send_email:
@@ -136,17 +149,11 @@ async def api_verify_registration_code(request: Request):
     attempts = int(session.get("verification_code_attempts") or 0)
 
     if issued_at <= 0 or int(time.time()) - issued_at > VERIFICATION_CODE_TTL_SECONDS:
-        session.pop("verification_code", None)
-        session.pop("temp_user_id", None)
-        session.pop("verification_code_issued_at", None)
-        session.pop("verification_code_attempts", None)
+        _clear_registration_verification_session(session)
         return jsonify({"status": "fail", "error": "認証コードの有効期限が切れています。"}, status_code=400)
 
     if attempts >= VERIFICATION_CODE_MAX_ATTEMPTS:
-        session.pop("verification_code", None)
-        session.pop("temp_user_id", None)
-        session.pop("verification_code_issued_at", None)
-        session.pop("verification_code_attempts", None)
+        _clear_registration_verification_session(session)
         return jsonify({"status": "fail", "error": "認証コードの試行回数が上限に達しました。"}, status_code=400)
 
     submitted_code = str(user_code or "")
@@ -154,15 +161,19 @@ async def api_verify_registration_code(request: Request):
         attempts += 1
         session["verification_code_attempts"] = attempts
         if attempts >= VERIFICATION_CODE_MAX_ATTEMPTS:
-            session.pop("verification_code", None)
-            session.pop("temp_user_id", None)
-            session.pop("verification_code_issued_at", None)
-            session.pop("verification_code_attempts", None)
+            _clear_registration_verification_session(session)
             return jsonify({"status": "fail", "error": "認証コードの試行回数が上限に達しました。"}, status_code=400)
         return jsonify({"status": "fail", "error": "認証コードが一致しません。"}, status_code=400)
 
     # ここから成功処理 ----------------------------------------------------
     # Success path starts here.
+    user = await run_blocking(get_user_by_id, user_id)
+    if not user:
+        _clear_registration_verification_session(session)
+        session.pop("user_id", None)
+        session.pop("user_email", None)
+        return jsonify({"status": "fail", "error": "ユーザーが存在しません"}, status_code=400)
+
     await run_blocking(set_user_verified, user_id)                 # ユーザーを認証済みに
     # Mark user as verified.
     await run_blocking(copy_default_tasks_for_user, user_id)       # ★ 共通タスクを複製 ★
@@ -170,15 +181,13 @@ async def api_verify_registration_code(request: Request):
 
     # ログイン状態にセット
     # Set authenticated session fields.
+    rotate_session_identifier(request)
     session["user_id"] = user_id
-    user                  = await run_blocking(get_user_by_id, user_id)
-    session["user_email"] = user["email"] if user else ""
+    session["user_email"] = user["email"]
+    set_session_permanent(session, True)
 
     # 一時セッション情報のクリア
     # Clear temporary verification session data.
-    session.pop("verification_code", None)
-    session.pop("temp_user_id", None)
-    session.pop("verification_code_issued_at", None)
-    session.pop("verification_code_attempts", None)
+    _clear_registration_verification_session(session)
 
     return jsonify({"status": "success"})

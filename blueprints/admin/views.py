@@ -9,8 +9,10 @@ from fastapi import Request
 from starlette.responses import RedirectResponse
 
 from services.async_utils import run_blocking
+from services.auth_limits import consume_admin_login_limit
 from services.db import Error, get_db_connection
 from services.security import verify_password
+from services.session_middleware import rotate_session_identifier
 from services.web import (
     flash,
     frontend_url,
@@ -115,8 +117,12 @@ async def api_login(request: Request):
     payload = await _get_payload(request)
     password = payload.get("password") or ""
     next_url = sanitize_next_path(payload.get("next"), default="/admin")
+    allowed, limit_error = consume_admin_login_limit(request)
+    if not allowed:
+        return jsonify({"status": "fail", "error": limit_error}, status_code=429)
 
     if _verify_admin_password(password):
+        rotate_session_identifier(request)
         request.session["is_admin"] = True
         flash(request, "Logged in as administrator.", "success")
         redirect_url = frontend_url(next_url)

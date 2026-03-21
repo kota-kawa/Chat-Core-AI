@@ -71,6 +71,7 @@ from services.web import (
     set_session_permanent,
     url_for,
 )
+from services.auth_limits import consume_auth_email_send_limits
 from services.request_models import AuthCodeRequest, EmailRequest
 from services.async_utils import run_blocking
 from services.csrf import require_csrf
@@ -99,6 +100,7 @@ from services.email_service import send_email
 from services.llm_daily_limit import consume_auth_email_daily_quota
 from services.runtime_config import is_production_env
 from services.security import constant_time_compare, generate_verification_code
+from services.session_middleware import rotate_session_identifier
 from blueprints.verification import (
     api_send_verification_email,
     api_verify_registration_code,
@@ -127,6 +129,13 @@ logger = logging.getLogger(__name__)
 
 LOGIN_VERIFICATION_CODE_TTL_SECONDS = 300
 LOGIN_VERIFICATION_CODE_MAX_ATTEMPTS = 5
+
+
+def _clear_login_verification_session(session: dict[str, Any]) -> None:
+    session.pop("login_verification_code", None)
+    session.pop("login_temp_user_id", None)
+    session.pop("login_verification_code_issued_at", None)
+    session.pop("login_verification_code_attempts", None)
 
 
 def _google_client_config() -> dict[str, Any]:
@@ -603,6 +612,7 @@ async def api_passkey_authenticate_verify(request: Request):
         _clear_passkey_session(request.session)
         return jsonify({"status": "fail", "error": "ユーザーが存在しないか、認証されていません"}, status_code=400)
 
+    rotate_session_identifier(request)
     request.session["user_id"] = passkey["user_id"]
     request.session["user_email"] = user["email"]
     set_session_permanent(request.session, True)
@@ -843,6 +853,7 @@ async def google_callback(request: Request):
 
     # セッション確立（最優先：以降の補助処理が失敗してもログインは成立させる）
     # Establish session first — non-critical helpers must not block login.
+    rotate_session_identifier(request)
     session["user_id"] = user_id
     session["user_email"] = email
     set_session_permanent(session, True)
@@ -908,6 +919,10 @@ async def api_send_login_code(request: Request):
         return validation_error
 
     email = payload.email
+    allowed, limit_error = consume_auth_email_send_limits(request, email)
+    if not allowed:
+        return jsonify({"status": "fail", "error": limit_error}, status_code=429)
+
     user = await run_blocking(get_user_by_email, email)
     if not user or not user["is_verified"]:
         return jsonify(
@@ -980,37 +995,34 @@ async def api_verify_login_code(request: Request):
     issued_at = int(session.get("login_verification_code_issued_at") or 0)
     attempts = int(session.get("login_verification_code_attempts") or 0)
     if issued_at <= 0 or int(time.time()) - issued_at > LOGIN_VERIFICATION_CODE_TTL_SECONDS:
-        session.pop("login_verification_code", None)
-        session.pop("login_temp_user_id", None)
-        session.pop("login_verification_code_issued_at", None)
-        session.pop("login_verification_code_attempts", None)
+        _clear_login_verification_session(session)
         return jsonify({"status": "fail", "error": "認証コードの有効期限が切れています。"}, status_code=400)
     if attempts >= LOGIN_VERIFICATION_CODE_MAX_ATTEMPTS:
-        session.pop("login_verification_code", None)
-        session.pop("login_temp_user_id", None)
-        session.pop("login_verification_code_issued_at", None)
-        session.pop("login_verification_code_attempts", None)
+        _clear_login_verification_session(session)
         return jsonify({"status": "fail", "error": "認証コードの試行回数が上限に達しました。"}, status_code=400)
 
     submitted_code = str(auth_code or "")
     if constant_time_compare(submitted_code, str(session_code)):
-        session["user_id"] = user_id
         user = await run_blocking(get_user_by_id, user_id)
+        if not user or not user.get("is_verified"):
+            _clear_login_verification_session(session)
+            session.pop("user_id", None)
+            session.pop("user_email", None)
+            return jsonify(
+                {"status": "fail", "error": "ユーザーが存在しないか、認証されていません"},
+                status_code=400,
+            )
+        rotate_session_identifier(request)
+        session["user_id"] = user_id
         session["user_email"] = user["email"] if user else ""
         set_session_permanent(session, True)
-        session.pop("login_verification_code", None)
-        session.pop("login_temp_user_id", None)
-        session.pop("login_verification_code_issued_at", None)
-        session.pop("login_verification_code_attempts", None)
+        _clear_login_verification_session(session)
         await run_blocking(copy_default_tasks_for_user, user_id)
         return jsonify({"status": "success", "message": "ログインに成功しました"})
     else:
         attempts += 1
         session["login_verification_code_attempts"] = attempts
         if attempts >= LOGIN_VERIFICATION_CODE_MAX_ATTEMPTS:
-            session.pop("login_verification_code", None)
-            session.pop("login_temp_user_id", None)
-            session.pop("login_verification_code_issued_at", None)
-            session.pop("login_verification_code_attempts", None)
+            _clear_login_verification_session(session)
             return jsonify({"status": "fail", "error": "認証コードの試行回数が上限に達しました。"}, status_code=400)
         return jsonify({"status": "fail", "error": "認証コードが一致しません。"}, status_code=400)

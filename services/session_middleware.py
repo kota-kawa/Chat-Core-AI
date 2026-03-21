@@ -5,6 +5,7 @@ import secrets
 from http.cookies import SimpleCookie
 from typing import Any
 
+from fastapi import Request
 from itsdangerous import BadSignature, URLSafeSerializer
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -15,6 +16,18 @@ from services.csrf import CSRF_SESSION_KEY
 
 REDIS_BACKEND = "redis"
 COOKIE_BACKEND = "cookie"
+SESSION_IDS_TO_DELETE_SCOPE_KEY = "_session_ids_to_delete"
+
+
+def rotate_session_identifier(request: Request) -> None:
+    # ログイン成功時はセッションIDを再発行して fixation を防ぐ
+    # Rotate the session identifier after authentication to mitigate session fixation.
+    scope = request.scope
+    current_session_id = scope.get("session_id")
+    if isinstance(current_session_id, str) and current_session_id:
+        pending = scope.setdefault(SESSION_IDS_TO_DELETE_SCOPE_KEY, set())
+        pending.add(current_session_id)
+    scope["session_id"] = None
 
 
 class PermanentSessionMiddleware:
@@ -151,8 +164,11 @@ class HybridSessionMiddleware:
     def _commit_session(self, scope: Scope, headers: MutableHeaders) -> None:
         session = scope.get("session") or {}
         session_id = scope.get("session_id")
+        pending_delete_ids = scope.get(SESSION_IDS_TO_DELETE_SCOPE_KEY) or set()
 
         if not session:
+            for stale_session_id in pending_delete_ids:
+                self._delete_session(stale_session_id)
             if session_id:
                 self._delete_session(session_id)
             self._set_cookie(headers, "", max_age=0)
@@ -164,6 +180,11 @@ class HybridSessionMiddleware:
         if not session_id:
             session_id = secrets.token_urlsafe(32)
             scope["session_id"] = session_id
+
+        for stale_session_id in pending_delete_ids:
+            if stale_session_id != session_id:
+                self._delete_session(stale_session_id)
+        scope[SESSION_IDS_TO_DELETE_SCOPE_KEY] = set()
 
         if self._save_session(session_id, session):
             self._set_cookie(
